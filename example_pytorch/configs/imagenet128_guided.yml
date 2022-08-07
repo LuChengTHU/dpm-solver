@@ -1,0 +1,70 @@
+data:
+    dataset: "IMAGENET128"
+    image_size: 128
+    channels: 3
+    logit_transform: false
+    uniform_dequantization: false
+    gaussian_dequantization: false
+    random_flip: true
+    rescaled: true
+    num_workers: 32
+    num_classes: 1000
+
+model:
+    model_type: "guided_diffusion"
+    is_upsampling: false
+    image_size: 128
+    in_channels: 3
+    model_channels: 256
+    out_channels: 6
+    num_res_blocks: 2
+    attention_resolutions: [4, 8, 16] # [128 // 32, 128 // 16, 128 // 8]
+    dropout: 0.0
+    channel_mult: [1, 1, 2, 3, 4]
+    conv_resample: true
+    dims: 2
+    num_classes: 1000
+    use_checkpoint: false
+    use_fp16: true
+    num_heads: 4
+    num_head_channels: -1
+    num_heads_upsample: -1
+    use_scale_shift_norm: true
+    resblock_updown: true
+    use_new_attention_order: false
+    var_type: fixedlarge
+    ema: false
+    ckpt_dir: "~/ddpm_ckpt/imagenet128/128x128_diffusion.pt"
+
+classifier:
+    ckpt_dir: "~/ddpm_ckpt/imagenet128/128x128_classifier.pt"
+    image_size: 128
+    in_channels: 3
+    model_channels: 128
+    out_channels: 1000
+    num_res_blocks: 2
+    attention_resolutions: [4, 8, 16] # [128 // 32, 128 // 16, 128 // 8]
+    channel_mult: [1, 1, 2, 3, 4]
+    use_fp16: true
+    num_head_channels: 64
+    use_scale_shift_norm: true
+    resblock_updown: true
+    pool: "attention"
+
+diffusion:
+    beta_schedule: linear
+    beta_start: 0.0001
+    beta_end: 0.02
+    num_diffusion_timesteps: 1000
+
+sampling:
+    total_N: 1000
+    schedule: "linear"
+    time_input_type: '1'
+    batch_size: 500
+    last_only: True
+    fid_stats_dir: "fid_stats/VIRTUAL_imagenet128_labeled.npz"
+    fid_total_samples: 50000
+    fid_batch_size: 200
+    cond_class: true
+    classifier_scale: 1.25
