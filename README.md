@@ -22,8 +22,8 @@ from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
 
 ## You need to firstly define your model and the extra inputs of your model,
 ## And initialize an `x_T` from the standard normal distribution.
-## If your model has no extra inputs, just let model_kwargs = {}.
 ## `model` has the format: model(x_t, t_input, **model_kwargs).
+## If your model has no extra inputs, just let model_kwargs = {}.
 
 # model = ....
 # model_kwargs = {...}
@@ -70,7 +70,7 @@ If you want to custom your own designed noise schedule, you need to implement th
 
 ### 2. Wrap your noise prediction model to the continuous-time model.
 
-For a given noise prediction model (i.e. the $\epsilon_\theta(x_t, t)$) `model` and `model_kwargs` with the following format:
+For a given noise prediction model (i.e. the $\epsilon_{\theta}(x_t, t)$ ) `model` and `model_kwargs` with the following format:
 
 ```python
 model(x_t, t_input, **model_kwargs)
@@ -88,7 +88,7 @@ where `t_continuous` is the continuous time labels (i.e. 0 to $T$). And we use `
 
 Note that DPM-Solver only needs the noise prediction model (the "mean" model), so for diffusion models which predict both "mean" and "variance" (such as [improved-DDPM](https://arxiv.org/abs/2102.09672)), you need to firstly define another function by your model to only output the "mean".
 
-If you want to custom your own designed model time input `t_input`,
+If you want to custom your own designed model time input `t_input`, you need to modify the function `get_model_input_time` in the function `model_wrapper` to add a new time input type.
 
 #### 2.1. Continuous-time DPMs
 For continuous-time DPMs, we have `t_input = t_continuous`. You can let `time_input_type` be `"0"` to wrap the model function:
@@ -152,28 +152,25 @@ where `model_fn` is the output of the function `model_wrapper`.
 You can use `dpm_solver.sample` to quickly sample from DPMs. This function computes the sample at time `eps` by DPM-Solver, given the initial `x_T` at time `T`.
 
 We support the following algorithms:
+- (**Recommended**) Fast version of DPM-Solver (i.e. DPM-Solver-fast), which uses uniform logSNR steps and combine different orders of DPM-Solver. 
+
 - Adaptive step size DPM-Solver (i.e. DPM-Solver-12 and DPM-Solver-23)
 
 - Fixed order DPM-Solver (i.e. DPM-Solver-1, DPM-Solver-2 and DPM-Solver-3).
 
-- Fast version of DPM-Solver (i.e. DPM-Solver-fast), which uses uniform logSNR steps and combine different orders of DPM-Solver. 
+**We recommend DPM-Solver-fast for both fast sampling in few steps (<=20) and fast convergence in many steps (converges in 50 steps).**
 
-**We recommend DPM-Solver-fast for both fast sampling in few steps (<=20) and fast convergence in many steps (50 to 100).**
-
-#### 3.1. Sampling by DPM-Solver-fast (recommended)
+#### 3.1. (Recommended) Sampling by DPM-Solver-fast
 Let `adaptive_step_size=False` and `fast_version=True`.
 
-We recommend `eps=1e-3` for `steps <= 15`, and `eps=1e-4` for `steps > 15`.
+We recommend `eps=1e-3` for `steps <= 15`, and `eps=1e-4` for `steps > 15`. For example:
 
-Given a fixed NFE=`steps`, the sampling procedure by DPM-Solver-fast is:
+* If you want to get a fine sample as fast as possible, you can use `eps=1e-3` and `steps=12`.
 
-- Denote K = (steps // 3 + 1). We take K intermediate time steps for sampling.
+* If you want to get a quite good sample, you can use `eps=1e-4` and `steps=20`.
 
-- If steps % 3 == 0, we use (K - 2) steps of DPM-Solver-3, and 1 step of DPM-Solver-2 and 1 step of DPM-Solver-1.
+* If you want to get a best (converged) sample, you can use `eps=1e-4` and `steps=50`.
 
-- If steps % 3 == 1, we use (K - 1) steps of DPM-Solver-3 and 1 step of DPM-Solver-1.
-
-- If steps % 3 == 2, we use (K - 1) steps of DPM-Solver-3 and 1 step of DPM-Solver-2.
 
 For example, to sample with NFE = 15:
 ```python
@@ -185,6 +182,17 @@ x_sample = dpm_solver.sample(
     fast_version=True,
 )
 ```
+
+More precisely, given a fixed NFE=`steps`, the sampling procedure by DPM-Solver-fast is:
+
+- Denote `K = (steps // 3 + 1)`. We take `K` intermediate time steps for sampling.
+
+- If `steps % 3 == 0`, we use `K - 2` steps of DPM-Solver-3, and `1` step of DPM-Solver-2 and 1 step of DPM-Solver-1.
+
+- If `steps % 3 == 1`, we use `K - 1` steps of DPM-Solver-3 and `1` step of DPM-Solver-1.
+
+- If `steps % 3 == 2`, we use `K - 1` steps of DPM-Solver-3 and `1` step of DPM-Solver-2.
+
 
 #### 3.2. Sampling by adaptive step size DPM-Solver
 Let `adaptive_step_size=True`.
