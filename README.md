@@ -8,7 +8,8 @@ DPM-Solver is a fast dedicated high-order solver for diffusion ODEs with the con
 
 ![DPM-Solver](assets/intro.png)
 
- 
+<br />
+
 ## Use DPM-Solver in your own code
 It is very easy to combine DPM-Solver with your own diffusion models. We support both Pytorch and JAX code. You can just copy the file `dpm_solver_pytorch.py` or `dpm_solver_jax.py` (The JAX code is cleaning and will be released soon) to your own code files and import it.
 
@@ -58,6 +59,8 @@ x_sample = dpm_solver.sample(
 ```
 To be specific, you need to finish the following three simple steps.
 
+<br />
+
 ### 1. Define the noise schedule.
 We support the 'linear' or 'cosine' VP noise schedule. For example, for the commly-used linear schedule (i.e. the $\beta_t$ is a linear function of $t$, as used in [DDPM](https://arxiv.org/abs/2006.11239)), you need to define:
 ```python
@@ -67,6 +70,8 @@ noise_schedule = NoiseScheduleVP(schedule='linear')
 ```
 
 If you want to custom your own designed noise schedule, you need to implement the `marginal_log_mean_coeff`, `marginal_std`, `marginal_lambda` and `inverse_lambda` functions of your noise schedule. Please refer to the detailed comments in the code of `NoiseScheduleVP`.
+
+<br />
 
 ### 2. Wrap your noise prediction model to the continuous-time model.
 
@@ -90,6 +95,8 @@ Note that DPM-Solver only needs the noise prediction model (the "mean" model), s
 
 If you want to custom your own designed model time input `t_input`, you need to modify the function `get_model_input_time` in the function `model_wrapper` to add a new time input type.
 
+<br />
+
 #### 2.1. Continuous-time DPMs
 For continuous-time DPMs, we have `t_input = t_continuous`. You can let `time_input_type` be `"0"` to wrap the model function:
 ```python
@@ -103,6 +110,8 @@ model_fn = model_wrapper(
     model_kwargs=model_kwargs
 )
 ```
+
+<br />
 
 #### 2.2. Discrete-time DPMs
 For discrete-time DPMs, we support two types for converting the discrete time to the continuous time (see Appendix in our paper). We recommend `time_input_type = "1"` (the default setting). You also need to specify the total length of the discrete time (default is `1000`):
@@ -118,6 +127,8 @@ model_fn = model_wrapper(
     model_kwargs=model_kwargs
 )
 ```
+
+<br />
 
 #### 2.3. DPMs with classifier guidance
 For DPMs with classifier guidance, we also combine the model output with the classifier gradient. You need to specify the classifier function and the guidance scale. The classifier function has the following format:
@@ -140,6 +151,8 @@ model_fn = model_wrapper(
 )
 ```
 
+<br />
+
 ### 3. Define DPM-Solver and compute samples
 Just let
 ```python
@@ -159,6 +172,8 @@ We support the following algorithms:
 - Fixed order DPM-Solver (i.e. DPM-Solver-1, DPM-Solver-2 and DPM-Solver-3).
 
 **We recommend DPM-Solver-fast for both fast sampling in few steps (<=20) and fast convergence in many steps (converges in 50 steps).**
+
+<br />
 
 #### 3.1. (Recommended) Sampling by DPM-Solver-fast
 Let `adaptive_step_size=False` and `fast_version=True`.
@@ -194,6 +209,8 @@ More precisely, given a fixed NFE=`steps`, the sampling procedure by DPM-Solver-
 - If `steps % 3 == 2`, we use `K - 1` steps of DPM-Solver-3 and `1` step of DPM-Solver-2.
 
 
+<br />
+
 #### 3.2. Sampling by adaptive step size DPM-Solver
 Let `adaptive_step_size=True`.
 
@@ -216,6 +233,8 @@ x_sample = dpm_solver.sample(
     rtol=0.05,
 )
 ```
+
+<br />
 
 #### 3.3. Sampling by DPM-Solver-k for k = 1, 2, 3
 Let `adaptive_step_size=False` and `fast_version=False`.
@@ -243,8 +262,12 @@ x_sample = dpm_solver.sample(
 )
 ```
 
+<br />
+
 ## Examples
 We also add a pytorch example and a JAX example. The documentations are coming soon.
+
+<br />
 
 ## TODO List
 - [ ] Documentation for example code.
@@ -253,6 +276,8 @@ We also add a pytorch example and a JAX example. The documentations are coming s
 - [ ] Add VE type noise schedule.
 
 
+
+<br />
 
 ## References
 
