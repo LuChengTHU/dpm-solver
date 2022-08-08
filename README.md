@@ -10,7 +10,7 @@ DPM-Solver is a fast dedicated high-order solver for diffusion ODEs with the con
 
 <br />
 
-## Use DPM-Solver in your own code
+# Use DPM-Solver in your own code
 It is very easy to combine DPM-Solver with your own diffusion models. We support both Pytorch and JAX code. You can just copy the file `dpm_solver_pytorch.py` or `dpm_solver_jax.py` (The JAX code is cleaning and will be released soon) to your own code files and import it.
 
 In each step, DPM-Solver needs to compute the corresponding $\alpha_t$, $\sigma_t$ and $\lambda_t$ of the noise schedule. We support the commonly-used variance preserving (VP) noise schedule with both linear schedule (as used in [DDPM](https://arxiv.org/abs/2006.11239)) and cosine schedule (as used in [improved-DDPM](https://arxiv.org/abs/2102.09672)) in the `NoiseScheduleVP` class.
@@ -61,7 +61,7 @@ To be specific, you need to finish the following three simple steps.
 
 <br />
 
-### 1. Define the noise schedule.
+## 1. Define the noise schedule.
 We support the 'linear' or 'cosine' VP noise schedule. For example, for the commly-used linear schedule (i.e. the $\beta_t$ is a linear function of $t$, as used in [DDPM](https://arxiv.org/abs/2006.11239)), you need to define:
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP
@@ -73,7 +73,7 @@ If you want to custom your own designed noise schedule, you need to implement th
 
 <br />
 
-### 2. Wrap your noise prediction model to the continuous-time model.
+## 2. Wrap your noise prediction model to the continuous-time model.
 
 For a given noise prediction model (i.e. the $\epsilon_{\theta}(x_t, t)$ ) `model` and `model_kwargs` with the following format:
 
@@ -97,7 +97,7 @@ If you want to custom your own designed model time input `t_input`, you need to 
 
 <br />
 
-#### 2.1. Continuous-time DPMs
+### 2.1. Continuous-time DPMs
 For continuous-time DPMs, we have `t_input = t_continuous`. You can let `time_input_type` be `"0"` to wrap the model function:
 ```python
 from dpm_solver_pytorch import model_wrapper
@@ -113,7 +113,7 @@ model_fn = model_wrapper(
 
 <br />
 
-#### 2.2. Discrete-time DPMs
+### 2.2. Discrete-time DPMs
 For discrete-time DPMs, we support two types for converting the discrete time to the continuous time (see Appendix in our paper). We recommend `time_input_type = "1"` (the default setting). You also need to specify the total length of the discrete time (default is `1000`):
 ```python
 from dpm_solver_pytorch import model_wrapper
@@ -130,7 +130,7 @@ model_fn = model_wrapper(
 
 <br />
 
-#### 2.3. DPMs with classifier guidance
+### 2.3. DPMs with classifier guidance
 For DPMs with classifier guidance, we also combine the model output with the classifier gradient. You need to specify the classifier function and the guidance scale. The classifier function has the following format:
 ```python
 classifier_fn(x_t, t_input)
@@ -153,7 +153,7 @@ model_fn = model_wrapper(
 
 <br />
 
-### 3. Define DPM-Solver and compute samples
+## 3. Define DPM-Solver and compute samples
 Just let
 ```python
 from dpm_solver_pytorch import DPM_Solver
@@ -175,7 +175,7 @@ We support the following algorithms:
 
 <br />
 
-#### 3.1. (Recommended) Sampling by DPM-Solver-fast
+### 3.1. (Recommended) Sampling by DPM-Solver-fast
 Let `adaptive_step_size=False` and `fast_version=True`.
 
 We recommend `eps=1e-3` for `steps <= 15`, and `eps=1e-4` for `steps > 15`. For example:
@@ -211,7 +211,7 @@ More precisely, given a fixed NFE=`steps`, the sampling procedure by DPM-Solver-
 
 <br />
 
-#### 3.2. Sampling by adaptive step size DPM-Solver
+### 3.2. Sampling by adaptive step size DPM-Solver
 Let `adaptive_step_size=True`.
 
 We recommend `eps=1e-4` for better sample quality.
@@ -236,7 +236,7 @@ x_sample = dpm_solver.sample(
 
 <br />
 
-#### 3.3. Sampling by DPM-Solver-k for k = 1, 2, 3
+### 3.3. Sampling by DPM-Solver-k for k = 1, 2, 3
 Let `adaptive_step_size=False` and `fast_version=False`.
 
 We use DPM-Solver-`order` for `order` = 1 or 2 or 3, with total [`steps` // `order`] * `order` NFE.
@@ -264,12 +264,12 @@ x_sample = dpm_solver.sample(
 
 <br />
 
-## Examples
+# Examples
 We also add a pytorch example and a JAX example. The documentations are coming soon.
 
 <br />
 
-## TODO List
+# TODO List
 - [ ] Documentation for example code.
 - [ ] Clean and add the JAX code example.
 - [ ] Add more explanations about DPM-Solver.
@@ -279,7 +279,7 @@ We also add a pytorch example and a JAX example. The documentations are coming s
 
 <br />
 
-## References
+# References
 
 If you find the code useful for your research, please consider citing
 ```bib
