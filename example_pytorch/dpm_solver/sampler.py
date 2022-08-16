@@ -204,7 +204,8 @@ def model_wrapper(model, noise_schedule=None, is_cond_classifier=False, classifi
             noise_uncond = model(x, t_discrete, **model_kwargs)
             cond_grad = cond_fn(x, t_discrete, y)
             sigma_t = noise_schedule.marginal_std(t_continuous)
-            return noise_uncond - sigma_t[:,None,None,None] * cond_grad
+            dims = len(cond_grad.shape) - 1
+            return noise_uncond - sigma_t[(...,) + (None,)*dims] * cond_grad
         else:
             t_discrete = get_model_input_time(t_continuous)
             return model(x, t_discrete, **model_kwargs)
@@ -302,6 +303,7 @@ class DPM_Solver:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
         ns = self.noise_schedule
+        dims = len(x.shape) - 1
         lambda_s, lambda_t = ns.marginal_lambda(s), ns.marginal_lambda(t)
         h = lambda_t - lambda_s
         log_alpha_s, log_alpha_t = ns.marginal_log_mean_coeff(s), ns.marginal_log_mean_coeff(t)
@@ -311,8 +313,8 @@ class DPM_Solver:
 
         noise_s = self.model_fn(x, s)
         x_t = (
-            torch.exp(log_alpha_t - log_alpha_s)[:,None,None,None] * x
-            - (sigma_t * phi_1)[:,None,None,None] * noise_s
+            torch.exp(log_alpha_t - log_alpha_s)[(...,) + (None,)*dims] * x
+            - (sigma_t * phi_1)[(...,) + (None,)*dims] * noise_s
         )
         if return_noise:
             return x_t, {'noise_s': noise_s}
@@ -335,6 +337,7 @@ class DPM_Solver:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
         ns = self.noise_schedule
+        dims = len(x.shape) - 1
         lambda_s, lambda_t = ns.marginal_lambda(s), ns.marginal_lambda(t)
         h = lambda_t - lambda_s
         lambda_s1 = lambda_s + r1 * h
@@ -348,14 +351,14 @@ class DPM_Solver:
         if noise_s is None:
             noise_s = self.model_fn(x, s)
         x_s1 = (
-            torch.exp(log_alpha_s1 - log_alpha_s)[:,None,None,None] * x
-            - (sigma_s1 * phi_11)[:,None,None,None] * noise_s
+            torch.exp(log_alpha_s1 - log_alpha_s)[(...,) + (None,)*dims] * x
+            - (sigma_s1 * phi_11)[(...,) + (None,)*dims] * noise_s
         )
         noise_s1 = self.model_fn(x_s1, s1)
         x_t = (
-            torch.exp(log_alpha_t - log_alpha_s)[:,None,None,None] * x
-            - (sigma_t * phi_1)[:,None,None,None] * noise_s
-            - (0.5 / r1) * (sigma_t * phi_1)[:,None,None,None] * (noise_s1 - noise_s)
+            torch.exp(log_alpha_t - log_alpha_s)[(...,) + (None,)*dims] * x
+            - (sigma_t * phi_1)[(...,) + (None,)*dims] * noise_s
+            - (0.5 / r1) * (sigma_t * phi_1)[(...,) + (None,)*dims] * (noise_s1 - noise_s)
         )
         if return_noise:
             return x_t, {'noise_s': noise_s, 'noise_s1': noise_s1}
@@ -380,6 +383,7 @@ class DPM_Solver:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
         ns = self.noise_schedule
+        dims = len(x.shape) - 1
         lambda_s, lambda_t = ns.marginal_lambda(s), ns.marginal_lambda(t)
         h = lambda_t - lambda_s
         lambda_s1 = lambda_s + r1 * h
@@ -399,21 +403,21 @@ class DPM_Solver:
             noise_s = self.model_fn(x, s)
         if noise_s1 is None:
             x_s1 = (
-                torch.exp(log_alpha_s1 - log_alpha_s)[:,None,None,None] * x
-                - (sigma_s1 * phi_11)[:,None,None,None] * noise_s
+                torch.exp(log_alpha_s1 - log_alpha_s)[(...,) + (None,)*dims] * x
+                - (sigma_s1 * phi_11)[(...,) + (None,)*dims] * noise_s
             )
             noise_s1 = self.model_fn(x_s1, s1)
         if noise_s2 is None:
             x_s2 = (
-                torch.exp(log_alpha_s2 - log_alpha_s)[:,None,None,None] * x
-                - (sigma_s2 * phi_12)[:,None,None,None] * noise_s
-                - r2 / r1 * (sigma_s2 * phi_22)[:,None,None,None] * (noise_s1 - noise_s)
+                torch.exp(log_alpha_s2 - log_alpha_s)[(...,) + (None,)*dims] * x
+                - (sigma_s2 * phi_12)[(...,) + (None,)*dims] * noise_s
+                - r2 / r1 * (sigma_s2 * phi_22)[(...,) + (None,)*dims] * (noise_s1 - noise_s)
             )
             noise_s2 = self.model_fn(x_s2, s2)
         x_t = (
-            torch.exp(log_alpha_t - log_alpha_s)[:,None,None,None] * x
-            - (sigma_t * phi_1)[:,None,None,None] * noise_s
-            - (1. / r2) * (sigma_t * phi_2)[:,None,None,None] * (noise_s2 - noise_s)
+            torch.exp(log_alpha_t - log_alpha_s)[(...,) + (None,)*dims] * x
+            - (sigma_t * phi_1)[(...,) + (None,)*dims] * noise_s
+            - (1. / r2) * (sigma_t * phi_2)[(...,) + (None,)*dims] * (noise_s2 - noise_s)
         )
         return x_t
 
