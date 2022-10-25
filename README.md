@@ -1,6 +1,6 @@
 # DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps
 
-The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://arxiv.org/abs/2206.00927) by Cheng Lu, Yuhao Zhou, Fan Bao, Jianfei Chen, Chongxuan Li and Jun Zhu.
+The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://arxiv.org/abs/2206.00927) (**Neurips 2022 Oral**) by Cheng Lu, Yuhao Zhou, Fan Bao, Jianfei Chen, Chongxuan Li and Jun Zhu.
 
 --------------------
 
@@ -10,14 +10,34 @@ DPM-Solver is a fast dedicated high-order solver for diffusion ODEs with the con
 
 <br />
 
+# News
+- **2022-10-26**. We have updated the **DPM-Solver v2.0**, a more stable version for high-resolutional image synthesis tasks. We have the following upgrades:
+    - We support the discrete-time DPMs by implementing a picewise linear interpolation of $\log\alpha_t$ for the `NoiseScheduleVP`.
+    
+        We strongly recommend to use the new implementation for discrete-time DPMs, especially for high-resolutional image synthesis. You can set `schedule='discrete'` to use the corresponding noise schedule. We also change the mapping between discrete-time inputs and continuous-time inputs in the `model_wrapper`, which has a consistent converged results with the other solvers.
+    - We change the API for `model_wrapper`, which is more easy to use.
+    - We support **new algorithms** for DPM-Solver, which greatly improve the high-resolutional image sample quality by guided sampling.
+        - We support both the noise prediction model $\epsilon_\theta(x_t,t)$ and the data prediction model $x_\theta(x_t,t)$. For the data prediction model, we further support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487).
+        - We support both *singlestep* solver (i.e. Runge-Kutta-like solver) and *multistep* solver (i.e. Adams-Bashforth-like solver) for DPM-Solver, including order 1, 2, 3.
+
+<br />
+
 # Use DPM-Solver in your own code
 It is very easy to combine DPM-Solver with your own diffusion models. We support both Pytorch and JAX code. You can just copy the file `dpm_solver_pytorch.py` or `dpm_solver_jax.py` (The JAX code is cleaning and will be released soon) to your own code files and import it.
 
-In each step, DPM-Solver needs to compute the corresponding $\alpha_t$, $\sigma_t$ and $\lambda_t$ of the noise schedule. We support the commonly-used variance preserving (VP) noise schedule with both linear schedule (as used in [DDPM](https://arxiv.org/abs/2006.11239)) and cosine schedule (as used in [improved-DDPM](https://arxiv.org/abs/2102.09672)) in the `NoiseScheduleVP` class.
+In each step, DPM-Solver needs to compute the corresponding $\alpha_t$, $\sigma_t$ and $\lambda_t$ of the noise schedule. We support the commonly-used variance preserving (VP) noise schedule for both discrete-time and continuous-time DPMs:
+
+- For discrete-time DPMs, we support a picewise linear interpolation of $\log\alpha_t$  in the `NoiseScheduleVP` class. It can support all types of VP noise schedules.
+
+- For continuous-time DPMs, we support both linear schedule (as used in [DDPM](https://arxiv.org/abs/2006.11239) and [ScoreSDE](https://arxiv.org/abs/2011.13456)) and cosine schedule (as used in [improved-DDPM](https://arxiv.org/abs/2102.09672)) in the `NoiseScheduleVP` class.
 
 Moreover, DPM-Solver is designed for the continuous-time diffusion ODEs. For discrete-time diffusion models, we also implement a wrapper function to convert the discrete-time diffusion models to the continuous-time diffusion models in the `model_wrapper` function.
 
-An example for using DPM-Solver:
+<br />
+
+## Unconditional Sampling by DPM-Solver
+We recommend to use **3rd-order singlestep** DPM-Solver for the **noise prediction model**. Here is an example for discrete-time DPMs:
+
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
 
@@ -26,41 +46,120 @@ from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
 ## `model` has the format: model(x_t, t_input, **model_kwargs).
 ## If your model has no extra inputs, just let model_kwargs = {}.
 
+## If you use discrete-time DPMs, you need to further define the
+## beta arrays for the noise schedule.
+
 # model = ....
 # model_kwargs = {...}
 # x_T = ...
+# betas = ....
 
 ## 1. Define the noise schedule.
-## We support the 'linear' or 'cosine' VP schedule.
-noise_schedule = NoiseScheduleVP(schedule='linear')
+noise_schedule = NoiseScheduleVP(schedule='discrete', betas=betas)
 
 ## 2. Convert your discrete-time noise prediction model `model`
 ## to the continuous-time noise prediction model.
 model_fn = model_wrapper(
     model,
     noise_schedule,
-    is_cond_classifier=False,
-    total_N=1000,
-    model_kwargs=model_kwargs
+    total_N=betas.shape[0],
+    model_kwargs=model_kwargs,
 )
 
-## 3. Define dpm-solver and sample by dpm-solver-fast (recommended).
+## 3. Define dpm-solver and sample by singlestep DPM-Solver.
+## (We recommend singlestep DPM-Solver for unconditional sampling)
 ## You can adjust the `steps` to balance the computation
 ## costs and the sample quality.
 dpm_solver = DPM_Solver(model_fn, noise_schedule)
 
+## You can use steps = 10, 12, 15, 20, 25, 50, 100.
+## Empirically, we find that steps in [10, 20] can generate quite good samples.
+## And steps = 20 can almost converge.
 x_sample = dpm_solver.sample(
     x_T,
     steps=15,
-    eps=1e-4,
-    adaptive_step_size=False,
-    fast_version=True,
+    order=3,
+    skip_type="time_uniform",
+    method="singlestep",
 )
 ```
-To be specific, you need to finish the following three simple steps.
 
 <br />
 
+## Guided Sampling by DPM-Solver
+We recommend to use **2nd-order multistep** DPM-Solver for the **data prediction model** (by setting `predict_x0 = True`), especially for large guidance scales. Here is an example for discrete-time DPMs:
+
+```python
+from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
+
+## You need to firstly define your model and the extra inputs of your model,
+## And initialize an `x_T` from the standard normal distribution.
+## `model` has the format: model(x_t, t_input, **model_kwargs).
+## If your model has no extra inputs, just let model_kwargs = {}.
+
+## If you use discrete-time DPMs, you need to further define the
+## beta arrays for the noise schedule.
+
+## For classifier guidance, you need to further define a classifier function
+## and a guidance scale.
+
+# model = ....
+# model_kwargs = {...}
+# x_T = ...
+# betas = ....
+# classifier = ...
+# classifier_kwargs = {...}
+# guidance_scale = ...
+
+## 1. Define the noise schedule.
+noise_schedule = NoiseScheduleVP(schedule='discrete', betas=betas)
+
+## 2. Convert your discrete-time noise prediction model `model`
+## to the continuous-time noise prediction model.
+model_fn = model_wrapper(
+    model,
+    noise_schedule,
+    guidance_scale=guidance_scale,
+    classifier_fn=classifier,
+    total_N=betas.shape[0],
+    model_kwargs=model_kwargs,
+    classifier_kwargs=classifier_kwargs,
+    condition_key="y",
+)
+
+## 3. Define dpm-solver and sample by singlestep DPM-Solver.
+## (We recommend singlestep DPM-Solver for unconditional sampling)
+## You can adjust the `steps` to balance the computation
+## costs and the sample quality.
+
+dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+
+## If the DPM is defined on pixel-space images, you can further
+## set `thresholding=True`. e.g.:
+
+# dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True,
+#   thresholding=True)
+
+
+## You can use steps = 10, 12, 15, 20, 25, 50, 100.
+## Empirically, we find that steps in [10, 20] can generate quite good samples.
+## And steps = 20 can almost converge.
+x_sample = dpm_solver.sample(
+    x_T,
+    steps=15,
+    order=2,
+    skip_type="time_uniform",
+    method="multistep",
+)
+```
+
+<br />
+
+# Documentation
+
+Coming soon...
+
+<!-- 
 ## 1. Define the noise schedule.
 We support the 'linear' or 'cosine' VP noise schedule. For example, for the commly-used linear schedule (i.e. the $\beta_t$ is a linear function of $t$, as used in [DDPM](https://arxiv.org/abs/2006.11239)), you need to define:
 ```python
@@ -262,7 +361,7 @@ x_sample = dpm_solver.sample(
 )
 ```
 
-<br />
+<br /> -->
 
 # Examples
 We also add a pytorch example and a JAX example. The documentations are coming soon.
@@ -270,6 +369,7 @@ We also add a pytorch example and a JAX example. The documentations are coming s
 <br />
 
 # TODO List
+- [ ] Add stable-diffusion examples.
 - [ ] Documentation for example code.
 - [ ] Clean and add the JAX code example.
 - [ ] Add more explanations about DPM-Solver.
