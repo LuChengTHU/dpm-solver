@@ -35,8 +35,88 @@ Moreover, DPM-Solver is designed for the continuous-time diffusion ODEs. For dis
 
 <br />
 
-## Unconditional Sampling by DPM-Solver
-We recommend to use **3rd-order singlestep** DPM-Solver for the **noise prediction model**. Here is an example for discrete-time DPMs:
+## Suggestions for the Detailed Settings
+We recommend to use the following two types of solvers for different tasks:
+
+- 3rd-order (noise-prediction + singlestep) DPM-Solver:
+    ```python
+    ## Define the model and noise schedule (see examples below) 
+    ## ....
+
+    ## Define DPM-Solver and compute the sample.
+    dpm_solver = DPM_Solver(model_fn, noise_schedule)
+
+    ## Steps in [10, 20] can generate quite good samples.
+    ## And steps = 20 can almost converge.
+    x_sample = dpm_solver.sample(
+        x_T,
+        steps=20,
+        order=3,
+        skip_type="time_uniform",
+        method="singlestep",
+    )
+    ```
+
+- 2nd-order (data-prediction + multistep) DPM-Solver:
+    - For general DPMs (e.g. latent-space DPMs):
+        ```python
+        ## Define the model and noise schedule (see examples below) 
+        ## ....
+
+        ## Define DPM-Solver and compute the sample.
+        dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+
+        ## Steps in [10, 20] can generate quite good samples.
+        ## And steps = 20 can almost converge.
+        x_sample = dpm_solver.sample(
+            x_T,
+            steps=20,
+            order=2,
+            skip_type="time_uniform",
+            method="multistep",
+        )
+        ```
+    - For DPMs trained on bounded data (e.g. pixel-space images), we further support the *dynamic thresholding* method introduced by [Imagen](https://arxiv.org/abs/2205.11487) by setting `thresholding = True`. The dynamic thresholding method can greatly improve the sample quality of pixel-space DPMs by guided sampling with large guidance scales.
+        ```python
+        ## Define the model and noise schedule (see examples below) 
+        ## ....
+
+        ## Define DPM-Solver and compute the sample.
+        dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True,
+                                thresholding=True, max_val=1.0)
+
+        ## Steps in [10, 20] can generate quite good samples.
+        ## And steps = 20 can almost converge.
+        x_sample = dpm_solver.sample(
+            x_T,
+            steps=20,
+            order=2,
+            skip_type="time_uniform",
+            method="multistep",
+        )
+        ```
+
+Specifically, we have the following suggestions:
+
+- For unconditional sampling:
+  - For obtaining a not too bad sample as fast as possible, use the 2nd-order (data-prediction + multistep) DPM-Solver with `steps` <= 10. 
+  - For obtaining a good but not converged sample, use the 3rd-order (noise-prediction + singlestep) DPM-Solver with `steps` = 15.
+  - **(Recommended)** For obtaining an almost converged sample, use the 3rd-order (noise-prediction + singlestep) DPM-Solver with `steps` = 20.
+  - For obtaining an absolutely converged sample, use the 3rd-order (noise-prediction + singlestep) DPM-Solver with `steps` = 50.
+
+- For guided sampling (especially with large guidance scales):
+  - Use the 2nd-order (data-prediction + multistep) DPM-Solver for all steps.
+  - For pixel-space DPMs (i.e. DPMs trained on images), set `thresholding = True`; else (e.g. latent-space DPMs) set `thresholding = False`.
+  - Choices for `steps`:
+    - For obtaining a not too bad sample as fast as possible, use `steps` <= 10. 
+    - For obtaining a good but not converged sample, use `steps` = 15.
+    - **(Recommended)** For obtaining an almost converged sample, use `steps` = 20.
+    - For obtaining an absolutely converged sample, use `steps` = 50.
+
+<br />
+
+## Example: Unconditional Sampling by DPM-Solver
+We recommend to use the 3rd-order (noise-prediction + singlestep) DPM-Solver. Here is an example for discrete-time DPMs:
 
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -77,7 +157,7 @@ dpm_solver = DPM_Solver(model_fn, noise_schedule)
 ## And steps = 20 can almost converge.
 x_sample = dpm_solver.sample(
     x_T,
-    steps=15,
+    steps=20,
     order=3,
     skip_type="time_uniform",
     method="singlestep",
@@ -86,8 +166,8 @@ x_sample = dpm_solver.sample(
 
 <br />
 
-## Guided Sampling by DPM-Solver
-We recommend to use **2nd-order multistep** DPM-Solver for the **data prediction model** (by setting `predict_x0 = True`), especially for large guidance scales. Here is an example for discrete-time DPMs:
+## Example: Guided Sampling by DPM-Solver
+We recommend to use the 2nd-order (data-prediction + multistep) DPM-Solver, especially for large guidance scales. Here is an example for discrete-time DPMs:
 
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -146,7 +226,7 @@ dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
 ## And steps = 20 can almost converge.
 x_sample = dpm_solver.sample(
     x_T,
-    steps=15,
+    steps=20,
     order=2,
     skip_type="time_uniform",
     method="multistep",
@@ -155,20 +235,65 @@ x_sample = dpm_solver.sample(
 
 <br />
 
+# Supported Algorithms
+
+We support the following four algorithms. The algorithms with noise-prediction are referred to DPM-Solver w.r.t. the *noise prediction model*, and the algorithms with data-prediction are referred to DPM-Solver w.r.t. the *data prediction model*. We also support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487) for algorithms with data-prediction. The dynamic thresholding method can further improve the sample quality by pixel-space DPMs with large guidance scales.
+
+Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model, and for algorithms with data-prediction we further convert the noise prediction model to the data prediction model inside the implementation of DPM-Solver.
+
+The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the multistep solvers (i.e.  Adams-Bashforth-like solvers) are different. We recommend to use different solvers for different tasks.
+
+| Method                        | Supported Orders | Support Thresholding | Remark                                                      |
+| ----------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- |
+| noise-prediction, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3) |
+| noise-prediction, multistep  | 1, 2, 3          | No                   |                                                             |
+| data-prediction, singlestep        | 1, 2, 3          | Yes                  |                                                             |
+| data-prediction, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2).        |
+
+<br />
+
 # Documentation
 
-Coming soon...
-
-<!-- 
 ## 1. Define the noise schedule.
-We support the 'linear' or 'cosine' VP noise schedule. For example, for the commly-used linear schedule (i.e. the $\beta_t$ is a linear function of $t$, as used in [DDPM](https://arxiv.org/abs/2006.11239)), you need to define:
-```python
-from dpm_solver_pytorch import NoiseScheduleVP
+We support the commonly-used variance preserving (VP) noise schedule for both discrete-time and continuous-time DPMs:
 
-noise_schedule = NoiseScheduleVP(schedule='linear')
+### 1.1. Discrete-time DPMs
+We support a picewise linear interpolation of $\log\alpha_{t}$  in the `NoiseScheduleVP` class. It can support all types of VP noise schedules.
+  
+We need either the $\beta_i$ array or the $\bar{\alpha}_i$ array (see [DDPM](https://arxiv.org/abs/2006.11239) for details) to define the noise schedule. Note that the $\bar{\alpha}_i$ in [DDPM](https://arxiv.org/abs/2006.11239) is different from the $\alpha_t$ in DPM-Solver, and the detailed relationship is:
+
+$$ \bar{\alpha}_i = \prod (1 - \beta_k) $$
+
+$$ \alpha_{t_i} = \sqrt{\bar{\alpha}_i} $$
+
+Define the discrete-time noise schedule by the $\beta_i$ array:
+```python
+noise_schedule = NoiseScheduleVP(schedule='discrete', betas=betas)
 ```
 
+Or define the discrete-time noise schedule by the $\bar{\alpha}_i$ array:
+```python
+noise_schedule = NoiseScheduleVP(schedule='discrete', alphas_cumprod=alphas_cumprod)
+```
+
+<br />
+
+### 1.2. Continuous-time DPMs
+We support both linear schedule (as used in [DDPM](https://arxiv.org/abs/2006.11239) and [ScoreSDE](https://arxiv.org/abs/2011.13456)) and cosine schedule (as used in [improved-DDPM](https://arxiv.org/abs/2102.09672)) for the continuous-time DPMs.
+
+Define the continuous-time linear noise schedule:
+```python
+noise_schedule = NoiseScheduleVP(schedule='linear', continuous_beta_0=0.1, continuous_beta_1=20.)
+```
+
+Define the continuous-time cosine noise schedule:
+```python
+noise_schedule = NoiseScheduleVP(schedule='cosine')
+```
+
+<!-- 
 If you want to custom your own designed noise schedule, you need to implement the `marginal_log_mean_coeff`, `marginal_std`, `marginal_lambda` and `inverse_lambda` functions of your noise schedule. Please refer to the detailed comments in the code of `NoiseScheduleVP`.
+ -->
 
 <br />
 
@@ -180,188 +305,303 @@ For a given noise prediction model (i.e. the $\epsilon_{\theta}(x_t, t)$ ) `mode
 model(x_t, t_input, **model_kwargs)
 ```
 
-where `t_input` is the time label of the model.
-(may be discrete-time labels (i.e. 0 to 999) or continuous-time labels (i.e. 0 to $T$).)
+where `t_input` is the time label of the model
+(may be discrete-time labels (i.e. 0 to 999) or continuous-time times (i.e. 0 to 1)).
 
 We wrap the model function to the following format:
 ```python
 model_fn(x, t_continuous)
 ```
 
-where `t_continuous` is the continuous time labels (i.e. 0 to $T$). And we use `model_fn` for DPM-Solver.
+where `t_continuous` is the continuous time labels (i.e. 0 to 1). And we use `model_fn` for DPM-Solver.
 
-Note that DPM-Solver only needs the noise prediction model (the "mean" model), so for diffusion models which predict both "mean" and "variance" (such as [improved-DDPM](https://arxiv.org/abs/2102.09672)), you need to firstly define another function by your model to only output the "mean".
-
-If you want to custom your own designed model time input `t_input`, you need to modify the function `get_model_input_time` in the function `model_wrapper` to add a new time input type.
+Note that DPM-Solver only needs the noise prediction model (the $\epsilon_\theta(x_t, t)$ model, also as known as the "mean" model), so for diffusion models which predict both "mean" and "variance" (such as [improved-DDPM](https://arxiv.org/abs/2102.09672)), you need to firstly define another function by yourself to only output the "mean".
 
 <br />
 
-### 2.1. Continuous-time DPMs
-For continuous-time DPMs, we have `t_input = t_continuous`. You can let `time_input_type` be `"0"` to wrap the model function:
-```python
-from dpm_solver_pytorch import model_wrapper
+### 2.1. Discrete-time DPMs
+After defining the discrete-time noise schedule, we need to further wrap the discrete-time model `model` to the continuous-time model `model_fn` by
 
+```python
 model_fn = model_wrapper(
     model,
     noise_schedule,
-    is_cond_classifier=False,
-    time_input_type="0",
-    model_kwargs=model_kwargs
-)
-```
-
-<br />
-
-### 2.2. Discrete-time DPMs
-For discrete-time DPMs, we support two types for converting the discrete time to the continuous time (see Appendix in our paper). We recommend `time_input_type = "1"` (the default setting). You also need to specify the total length of the discrete time (default is `1000`):
-```python
-from dpm_solver_pytorch import model_wrapper
-
-model_fn = model_wrapper(
-    model,
-    noise_schedule,
-    is_cond_classifier=False,
-    time_input_type="1",
     total_N=1000,
-    model_kwargs=model_kwargs
+    model_kwargs=model_kwargs,
 )
 ```
 
+where `total_N` is the length of the $\beta_i$ array or the $\bar{\alpha}_i$ array (e.g. $1000$), and `model_kwargs` is the additional inputs of the model.
+
+#### Implementation Details of Discrete-time DPM-Solver
+Below we introduce the detailed mapping between the discrete-time labels and the continuous-time times. However, to use DPM-Solver, it is not necessary to understand the following details. 
+
+For discrete-time DPMs, the noise prediction model noise-prediction is trained for the discrete-time labels from $0$ to $N-1$. Therefore, we sample from the discrete-time label $N - 1$ (e.g. 999) to the discrete-time label $0$. We convert the discrete-time labels in $[0, N-1]$ to the continuous-time times $(0,1]$ by
+
+$$
+    t_{\text{discrete}} = 1000 * \left(t_{\text{continuous}} - \frac{1}{N}\right),
+$$
+
+i.e. we map the discrete-time label $0$ to the continuous-time time $\frac{1}{N}$, and the discrete-time label $N-1$ to the continuous-time time $1$. Therefore, sampling from the discrete time from $N-1$ to $0$ is corresponding to sampling from the continuous time from $1$ to $\frac{1}{N}$.
+
 <br />
 
-### 2.3. DPMs with classifier guidance
+
+### 2.2. Continuous-time DPMs
+After defining the continuous-time noise schedule, we need to further wrap the discrete-time model `model` to the continuous-time model `model_fn` by
+
+```python
+model_fn = model_wrapper(
+    model,
+    noise_schedule,
+    model_kwargs=model_kwargs,
+)
+```
+
+where `model_kwargs` is the additional inputs of the model.
+
+#### Implementation Details of Continuous-time DPM-Solver
+For continuous-time DPMs from defined by $t \in [0,1]$, we simply wrap the model to accept only $x_t$ and $t$. Note that for continuous-time DPMs, we do not modify the time inputs.
+
+<br />
+
+### 2.3. DPMs with Classifier Guidance
 For DPMs with classifier guidance, we also combine the model output with the classifier gradient. You need to specify the classifier function and the guidance scale. The classifier function has the following format:
 ```python
-classifier_fn(x_t, t_input)
+classifier_fn(x_t, t_input, **classifier_kwargs)
 ```
-where `t_input` is the same time label as in the original diffusion model `model`. For example, for discrete-time DPMs with classifier guidance:
-```python
-from dpm_solver_pytorch import model_wrapper
+where `t_input` is the same time label as in the original diffusion model `model`. Moreover for classifier guidance, the `model` function also has a condition variable input in the `model_kwargs`. You need to specify the key of the condition in the `model_kwargs` by `condition_key` (i.e. `model_kwargs[condition_key]` is the condition variable).
 
+For example, for discrete-time DPMs with classifier guidance:
+```python
 model_fn = model_wrapper(
     model,
     noise_schedule,
-    is_cond_classifier=True,
-    classifier_fn=classifier_fn,
-    classifier_scale=1.,
-    time_input_type="1",
     total_N=1000,
-    model_kwargs=model_kwargs
+    guidance_scale=1.0,
+    classifier_fn=classifier_fn,
+    model_kwargs=model_kwargs,
+    classifier_kwargs=classifier_kwargs,
+    condition_key="y",
 )
 ```
 
 <br />
 
-## 3. Define DPM-Solver and compute samples
-Just let
-```python
-from dpm_solver_pytorch import DPM_Solver
+### 2.4. DPMs with Classifier-free Guidance
+For classifier-free guidance, you need to manually define the noise prediction model `model` by combining the unconditional and the conditional model. Specifically, the `model` is defined by
 
-dpm_solver = DPM_Solver(model_fn, noise_schedule)
-```
-where `model_fn` is the output of the function `model_wrapper`.
+$$
+    \tilde \epsilon_\theta(x_t,t,c) \coloneqq s \cdot \epsilon_\theta(x_t,t,c) + (1 - s)\cdot \epsilon_\theta(x_t,t)
+$$
 
-You can use `dpm_solver.sample` to quickly sample from DPMs. This function computes the sample at time `eps` by DPM-Solver, given the initial `x_T` at time `T`.
-
-We support the following algorithms:
-- (**Recommended**) Fast version of DPM-Solver (i.e. DPM-Solver-fast), which uses uniform logSNR steps and combine different orders of DPM-Solver. 
-
-- Adaptive step size DPM-Solver (i.e. DPM-Solver-12 and DPM-Solver-23)
-
-- Fixed order DPM-Solver (i.e. DPM-Solver-1, DPM-Solver-2 and DPM-Solver-3).
-
-**We recommend DPM-Solver-fast for both fast sampling in few steps (<=20) and fast convergence in many steps (converges in 50 steps).**
+and then use $\tilde \epsilon_\theta$ for the `model_wrapper` function.
 
 <br />
 
-### 3.1. (Recommended) Sampling by DPM-Solver-fast
-Let `adaptive_step_size=False` and `fast_version=True`.
+## 3. Define DPM-Solver
+After defining the `model_fn` by the function `model_wrapper`, we can further use `model_fn` to define DPM-Solver and compute samples.
 
-We recommend `eps=1e-3` for `steps <= 15`, and `eps=1e-4` for `steps > 15`. For example:
+We support the following four algorithms. The algorithms with noise-prediction are referred to DPM-Solver w.r.t. the *noise prediction model*, and the algorithms with data-prediction are referred to DPM-Solver w.r.t. the *data prediction model*. We also support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487) for algorithms with data-prediction. The dynamic thresholding method can further improve the sample quality by pixel-space DPMs with large guidance scales.
 
-* If you want to get a fine sample as fast as possible, you can use `eps=1e-3` and `steps=12`.
+Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model, and for algorithms with data-prediction we further convert the noise prediction model to the data prediction model inside the implementation of DPM-Solver.
 
-* If you want to get a quite good sample, you can use `eps=1e-4` and `steps=20`.
+The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the multistep solvers (i.e.  Adams-Bashforth-like solvers) are different. We recommend to use different solvers for different tasks.
 
-* If you want to get a best (converged) sample, you can use `eps=1e-4` and `steps=50`.
+| Method                        | Supported Orders | Support Thresholding | Remark                                                      |
+| ----------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- |
+| noise-prediction, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3) |
+| noise-prediction, multistep  | 1, 2, 3          | No                   |                                                             |
+| data-prediction, singlestep        | 1, 2, 3          | Yes                  |                                                             |
+| data-prediction, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2)        |
 
 
-For example, to sample with NFE = 15:
+- For DPM-Solver w.r.t. noise-prediction, define
+    ```python
+    dpm_solver = DPM_Solver(model_fn, noise_schedule)
+    ```
+
+- For DPM-Solver w.r.t. data-prediction, define
+    ```python
+    dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+    ```
+
+- For DPM-Solver w.r.t. data-prediction and applying dynamic thresholding, define
+    ```python
+    dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True,
+                            thresholding=True, max_val=1.0)
+    ```
+
+You can use `dpm_solver.sample` to quickly sample from DPMs. This function computes the ODE solution at time `t_end` by DPM-Solver, given the initial `x` at time `t_start`.
+
+We support the following algorithms:
+- Singlestep DPM-Solver. We combine all the singlestep solvers with order <= `order` to use up all the function evaluations (steps).
+
+- Multistep DPM-Solver.
+
+- Fixed order singlestep DPM-Solver (i.e. DPM-Solver-1, DPM-Solver-2 and DPM-Solver-3).
+
+- Adaptive step size DPM-Solver. (i.e. DPM-Solver-12 and DPM-Solver-23)
+
+
+We support three types of `skip_type` for the choice of intermediate time steps:
+
+- `logSNR`: uniform logSNR for the time steps. **Recommended for low-resolutional images**.
+
+- `time_uniform`: uniform time for the time steps. **Recommended for high-resolutional images**.
+
+- `time_quadratic`: quadratic time for the time steps.
+
+
+<br />
+
+### 3.1. Sampling by Singlestep DPM-Solver
+
+We combine all the singlestep solvers with order <= `order` to use up all the function evaluations (steps). The total number of function evaluations (NFE) == `steps`.
+
+For discrete-time DPMs, we do not need to specify the `t_start` and `t_end`. The default setting is to sample from the discrete-time label $N-1$ to the discrete-time label $0$. For example,
+```python
+## discrete-time DPMs
+x_sample = dpm_solver.sample(
+    x_T,
+    steps=20,
+    order=3,
+    skip_type="time_uniform",
+    method="singlestep",
+)
+```
+
+<br />
+
+For continuous-time DPMs, we sample from `t_start=1.0` (the default setting) to `t_end`. We recommend `t_end=1e-3` for `steps <= 15`, and `t_end=1e-4` for `steps > 15`. For example:
 ```python
 x_sample = dpm_solver.sample(
     x_T,
-    steps=15,
-    eps=1e-4,
-    adaptive_step_size=False,
-    fast_version=True,
+    t_end=1e-3,
+    steps=12,
+    order=3,
+    skip_type="time_uniform",
+    method="singlestep",
+)
+```
+```python
+## continuous-time DPMs
+x_sample = dpm_solver.sample(
+    x_T,
+    t_end=1e-4,
+    steps=20,
+    order=3,
+    skip_type="time_uniform",
+    method="singlestep",
 )
 ```
 
-More precisely, given a fixed NFE=`steps`, the sampling procedure by DPM-Solver-fast is:
+#### Implementation Details of Singlestep DPM-Solver
 
-- Denote `K = (steps // 3 + 1)`. We take `K` intermediate time steps for sampling.
-
-- If `steps % 3 == 0`, we use `K - 2` steps of DPM-Solver-3, and `1` step of DPM-Solver-2 and 1 step of DPM-Solver-1.
-
-- If `steps % 3 == 1`, we use `K - 1` steps of DPM-Solver-3 and `1` step of DPM-Solver-1.
-
-- If `steps % 3 == 2`, we use `K - 1` steps of DPM-Solver-3 and `1` step of DPM-Solver-2.
+Given a fixed NFE == `steps`, the sampling procedure is:
+- If `order` == 1:
+    - Denote K = `steps`. We use K steps of DPM-Solver-1 (i.e. DDIM).
+- If `order` == 2:
+    - Denote K = (`steps` // 2) + (`steps` % 2). We take K intermediate time steps for sampling.
+    - If `steps` % 2 == 0, we use K steps of singlestep DPM-Solver-2.
+    - If `steps` % 2 == 1, we use (K - 1) steps of singlestep DPM-Solver-2 and 1 step of DPM-Solver-1.
+- If `order` == 3:
+    - Denote K = (`steps` // 3 + 1). We take K intermediate time steps for sampling.
+    - If `steps` % 3 == 0, we use (K - 2) steps of singlestep DPM-Solver-3, and 1 step of singlestep DPM-Solver-2 and 1 step of DPM-Solver-1.
+    - If `steps` % 3 == 1, we use (K - 1) steps of singlestep DPM-Solver-3 and 1 step of DPM-Solver-1.
+    - If `steps` % 3 == 2, we use (K - 1) steps of singlestep DPM-Solver-3 and 1 step of singlestep DPM-Solver-2.
 
 
 <br />
 
-### 3.2. Sampling by adaptive step size DPM-Solver
-Let `adaptive_step_size=True`.
+### 3.2. Sampling by multistep DPM-Solver
+For discrete-time DPMs, we do not need to specify the `t_start` and `t_end`. The default setting is to sample from the discrete-time label $N-1$ to the discrete-time label $0$. For example,
+```python
+## discrete-time DPMs
+x_sample = dpm_solver.sample(
+    x_T,
+    steps=20,
+    order=2,
+    skip_type="time_uniform",
+    method="multistep",
+)
+```
 
-We recommend `eps=1e-4` for better sample quality.
+<br />
 
-If `order`=2, we use DPM-Solver-12 which combines DPM-Solver-1 and DPM-Solver-2.
+For continuous-time DPMs, we sample from `t_start=1.0` (the default setting) to `t_end`. We recommend `t_end=1e-3` for `steps <= 15`, and `t_end=1e-4` for `steps > 15`. For example:
+```python
+x_sample = dpm_solver.sample(
+    x_T,
+    t_end=1e-3,
+    steps=10,
+    order=2,
+    skip_type="time_uniform",
+    method="multistep",
+)
+```
+```python
+## continuous-time DPMs
+x_sample = dpm_solver.sample(
+    x_T,
+    t_end=1e-4,
+    steps=20,
+    order=3,
+    skip_type="time_uniform",
+    method="multistep",
+)
+```
 
-If `order`=3, we use DPM-Solver-23 which combines DPM-Solver-2 and DPM-Solver-3.
+#### Implementation Details of Multistep DPM-Solver
+We initialize the first `order` values by lower order multistep solvers.
 
+Given a fixed NFE == `steps`, the sampling procedure is:
+- Denote K = `steps`.
+- If `order` == 1:
+    - We use K steps of DPM-Solver-1 (i.e. DDIM).
+- If `order` == 2:
+    - We firstly use 1 step of DPM-Solver-1, then use (K - 1) step of multistep DPM-Solver-2.
+- If `order` == 3:
+    - We firstly use 1 step of DPM-Solver-1, then 1 step of multistep DPM-Solver-2, then (K - 2) step of multistep DPM-Solver-3.
+
+
+### 3.3. Sampling by adaptive step size DPM-Solver
+For continuous-time DPMs, we recommend `t_end=1e-4` for better sample quality.
+
+We ignore `steps` and use adaptive step size DPM-Solver with a higher order of `order`.
 You can adjust the absolute tolerance `atol` and the relative tolerance `rtol` to balance the computatation costs (NFE) and the sample quality. For image data, we recommend `atol=0.0078` (the default setting).
+
+- If `order` == 2, we use DPM-Solver-12 which combines DPM-Solver-1 and singlestep DPM-Solver-2.
+- If `order` == 3, we use DPM-Solver-23 which combines singlestep DPM-Solver-2 and singlestep DPM-Solver-3.
 
 For example, to sample by DPM-Solver-12:
 ```python
 x_sample = dpm_solver.sample(
     x_T,
-    eps=1e-4,
+    t_end=1e-4,
     order=2,
-    adaptive_step_size=True,
-    fast_version=False,
+    method="adaptive",
     rtol=0.05,
 )
 ```
 
 <br />
 
-### 3.3. Sampling by DPM-Solver-k for k = 1, 2, 3
-Let `adaptive_step_size=False` and `fast_version=False`.
-
+### 3.4. Sampling by Singlestep DPM-Solver-k for k = 1, 2, 3
 We use DPM-Solver-`order` for `order` = 1 or 2 or 3, with total [`steps` // `order`] * `order` NFE.
-
-We support three types of `skip_type`:
-
-- 'logSNR': uniform logSNR for the time steps, **recommended for DPM-Solver**.
-
-- 'time_uniform': uniform time for the time steps. (Used in DDIM and DDPM.)
-
-- 'time_quadratic': quadratic time for the time steps. (Used in DDIM.)
 
 For example, to sample by DPM-Solver-3:
 ```python
 x_sample = dpm_solver.sample(
     x_T,
     steps=30,
-    eps=1e-4,
     order=3,
-    skip_type='logSNR',
-    adaptive_step_size=False,
-    fast_version=False,
+    skip_type="time_uniform",
+    method="singlestep_fixed",
 )
 ```
 
-<br /> -->
+<br />
 
 # Examples
 We also add a pytorch example and a JAX example. The documentations are coming soon.
