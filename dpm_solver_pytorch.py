@@ -175,71 +175,106 @@ class NoiseScheduleVP:
 
 
 def model_wrapper(
-        model,
-        noise_schedule,
-        guidance_scale=1.,
-        classifier_fn=None,
-        total_N=1000,
-        model_kwargs={},
-        classifier_kwargs={},
-        condition_key="y",
-    ):
+    model,
+    noise_schedule,
+    model_type="noise",
+    model_kwargs={},
+    guidance_type="uncond",
+    condition=None,
+    unconditional_condition=None,
+    guidance_scale=1.,
+    classifier_fn=None,
+    classifier_kwargs={},
+):
     """Create a wrapper function for the noise prediction model.
 
     DPM-Solver needs to solve the continuous-time diffusion ODEs. For DPMs trained on discrete-time labels, we need to
-    firstly wrap the model function to a function that accepts the continuous time as the input.
+    firstly wrap the model function to a noise prediction model that accepts the continuous time as the input.
 
-    The input `model` has the following format:
+    We support four types of the diffusion model by setting `model_type`:
 
-    ``
-        model(x, t_input, **model_kwargs) -> noise
-    ``
+        1. "noise": noise prediction model. (Trained by predicting noise).
 
-    where `x` and `noise` have the same shape, and `t_input` is the time label of the model.
-    (may be discrete-time labels (i.e. 0 to 999) or continuous-time labels (i.e. epsilon to T).)
+        2. "x_start": data prediction model. (Trained by predicting the data x_0 at time 0).
 
-    We wrap the model function to the following format:
+        3. "v": velocity prediction model. (Trained by predicting the velocity).
+            The "v" prediction is derivation detailed in Appendix D of [1], and is used in Imagen-Video [2].
 
+            [1] Salimans, Tim, and Jonathan Ho. "Progressive distillation for fast sampling of diffusion models."
+                arXiv preprint arXiv:2202.00512 (2022).
+            [2] Ho, Jonathan, et al. "Imagen Video: High Definition Video Generation with Diffusion Models."
+                arXiv preprint arXiv:2210.02303 (2022).
+    
+        4. "score": marginal score function. (Trained by denoising score matching).
+            Note that the score function and the noise prediction model follows a simple relationship:
+            ```
+                noise(x_t, t) = -sigma_t * score(x_t, t)
+            ```
+
+    We support three types of guided sampling by DPMs by setting `guidance_type`:
+        1. "uncond": unconditional sampling by DPMs.
+            The input `model` has the following format:
+            ``
+                model(x, t_input, **model_kwargs) -> noise | x_start | v | score
+            ``
+
+        2. "classifier": classifier guidance sampling [3] by DPMs and another classifier.
+            The input `model` has the following format:
+            ``
+                model(x, t_input, **model_kwargs) -> noise | x_start | v | score
+            `` 
+
+            The input `classifier_fn` has the following format:
+            ``
+                classifier_fn(x, t_input, cond, **classifier_kwargs) -> logits(x, t_input, cond)
+            ``
+
+            [3] P. Dhariwal and A. Q. Nichol, "Diffusion models beat GANs on image synthesis,"
+                in Advances in Neural Information Processing Systems, vol. 34, 2021, pp. 8780-8794.
+
+        3. "classifier-free": classifier-free guidance sampling by conditional DPMs.
+            The input `model` has the following format:
+            ``
+                model(x, t_input, cond, **model_kwargs) -> noise | x_start | v | score
+            `` 
+            And if cond == `unconditional_condition`, the model output is the unconditional DPM output.
+
+            [4] Ho, Jonathan, and Tim Salimans. "Classifier-free diffusion guidance."
+                arXiv preprint arXiv:2207.12598 (2022).
+        
+
+    The `t_input` is the time label of the model, which may be discrete-time labels (i.e. 0 to 999)
+    or continuous-time labels (i.e. epsilon to T).
+
+    We wrap the model function to accept only `x` and `t_continuous` as inputs, and outputs the predicted noise:
     ``
         def model_fn(x, t_continuous) -> noise:
             t_input = get_model_input_time(t_continuous)
-            return model(x, t_input, **model_kwargs)            
+            return noise_pred(model, x, t_input, **model_kwargs)         
     ``
-    
     where `t_continuous` is the continuous time labels (i.e. epsilon to T). And we use `model_fn` for DPM-Solver.
-
-    For DPMs with classifier guidance, we also combine the model output with the classifier gradient as used in [1].
-
-    [1] P. Dhariwal and A. Q. Nichol, "Diffusion models beat GANs on image synthesis," in Advances in Neural 
-    Information Processing Systems, vol. 34, 2021, pp. 8780-8794.
 
     ===============================================================
 
     Args:
-        model: A noise prediction model with the following format:
-            ``
-                def model(x, t_input, **model_kwargs):
-                    return noise
-            ``
+        model: A diffusion model with the corresponding format described above.
         noise_schedule: A noise schedule object, such as NoiseScheduleVP.
-        guidance_scale: A `float`. The scale for the classifier guidance.
-        classifier_fn: A classifier function. Only used for the classifier guidance. The format is:
-            ``
-                def classifier_fn(x, t_input, **classifier_kwargs):
-                    return logits
-            ``
-        total_N: A `int`. The total number of trained time steps for the discrete-time DPMs (default is 1000).
+        model_type: A `str`. The parameterization type of the diffusion model.
+                    "noise" or "x_start" or "v" or "score".
         model_kwargs: A `dict`. A dict for the other inputs of the model function.
-        classifier_kwargs: A `dict`. A dict for the other inputs of the model function.
-        condition_key: A `str`. The key for the condition in `model_kwargs`.
+        guidance_type: A `str`. The type of the guidance for sampling.
+                    "uncond" or "classifier" or "classifier-free".
+        condition: A pytorch tensor. The condition for the guided sampling.
+                    Only used for "classifier" or "classifier-free" guidance type.
+        unconditional_condition: A pytorch tensor. The condition for the unconditional sampling.
+                    Only used for "classifier-free" guidance type.
+        guidance_scale: A `float`. The scale for the guided sampling.
+        classifier_fn: A classifier function. Only used for the classifier guidance.
+        classifier_kwargs: A `dict`. A dict for the other inputs of the classifier function.
     Returns:
-        A function that accepts the continuous time as the input, with the following format:
-            ``
-                def model_fn(x, t_continuous):
-                    t_input = get_model_input_time(t_continuous)
-                    return model(x, t_input, **model_kwargs)            
-            ``
+        A noise prediction model that accepts the noised data and the continuous time as the inputs.
     """
+
     def get_model_input_time(t_continuous):
         """
         Convert the continuous-time `t_continuous` (in [epsilon, T]) to the model input time.
@@ -247,40 +282,69 @@ def model_wrapper(
         For continuous-time DPMs, we just use `t_continuous`.
         """
         if noise_schedule.schedule == 'discrete':
-            return (t_continuous - 1. / total_N) * 1000.
+            return (t_continuous - 1. / noise_schedule.total_N) * 1000.
         else:
             return t_continuous
 
-    def cond_fn(x, t_input, y):
+    def noise_pred_fn(x, t_continuous, cond=None):
+        if t_continuous.reshape((-1,)).shape[0] == 1:
+            t_continuous = t_continuous.expand((x.shape[0]))
+        t_input = get_model_input_time(t_continuous)
+        if cond is None:
+            output = model(x, t_input, **model_kwargs)
+        else:
+            output = model(x, t_input, cond, **model_kwargs)
+        if model_type == "noise":
+            return output
+        elif model_type == "x_start":
+            alpha_t, sigma_t = noise_schedule.marginal_alpha(t_continuous), noise_schedule.marginal_std(t_continuous)
+            dims = x.dim()
+            return (x - expand_dims(alpha_t, dims) * output) / expand_dims(sigma_t, dims)
+        elif model_type == "v":
+            alpha_t, sigma_t = noise_schedule.marginal_alpha(t_continuous), noise_schedule.marginal_std(t_continuous)
+            dims = x.dim()
+            return expand_dims(alpha_t, dims) * output + expand_dims(sigma_t, dims) * x
+        elif model_type == "score":
+            sigma_t = noise_schedule.marginal_std(t_continuous)
+            dims = x.dim()
+            return -expand_dims(sigma_t, dims) * output
+
+    def cond_grad_fn(x, t_input):
         """
-        Compute the gradient of the classifier, multiplied with the guidance scale. 
+        Compute the gradient of the classifier, i.e. nabla_{x} log p_t(cond | x_t).
         """
-        assert y is not None
         with torch.enable_grad():
             x_in = x.detach().requires_grad_(True)
-            logits = classifier_fn(x_in, t_input, **classifier_kwargs)
-            log_probs = F.log_softmax(logits, dim=-1)
-            selected = log_probs[range(len(logits)), y.view(-1)]
-            return guidance_scale * torch.autograd.grad(selected.sum(), x_in)[0]
+            log_prob = classifier_fn(x_in, t_input, condition, **classifier_kwargs)
+            return torch.autograd.grad(log_prob.sum(), x_in)[0]
 
     def model_fn(x, t_continuous):
         """
         The noise predicition model function that is used for DPM-Solver.
         """
         if t_continuous.reshape((-1,)).shape[0] == 1:
-            t_continuous = torch.ones((x.shape[0],)).to(x.device) * t_continuous
-        t_input = get_model_input_time(t_continuous)
-        noise_uncond = model(x, t_input, **model_kwargs)
-        if classifier_fn is not None:
-            y = model_kwargs.get(condition_key, None)
-            if y is None:
-                raise ValueError(f"For classifier guidance, the label {condition_key} has to be in the input.")
-            cond_grad = cond_fn(x, t_input, y)
+            t_continuous = t_continuous.expand((x.shape[0]))
+        if guidance_type == "uncond":
+            return noise_pred_fn(x, t_continuous)
+        elif guidance_type == "classifier":
+            assert classifier_fn is not None
+            t_input = get_model_input_time(t_continuous)
+            cond_grad = cond_grad_fn(x, t_input)
             sigma_t = noise_schedule.marginal_std(t_continuous)
-            return noise_uncond - expand_dims(sigma_t, dims=cond_grad.dim()) * cond_grad
-        else:
-            return noise_uncond
+            noise = noise_pred_fn(x, t_continuous)
+            return noise - guidance_scale * expand_dims(sigma_t, dims=cond_grad.dim()) * cond_grad
+        elif guidance_type == "classifier-free":
+            if guidance_scale == 1. or unconditional_condition is None:
+                return noise_pred_fn(x, t_continuous, cond=condition)
+            else:
+                x_in = torch.cat([x] * 2)
+                t_in = torch.cat([t_continuous] * 2)
+                c_in = torch.cat([unconditional_condition, condition])
+                noise_uncond, noise = noise_pred_fn(x_in, t_in, cond=c_in).chunk(2)
+                return noise_uncond + guidance_scale * (noise - noise_uncond)
 
+    assert model_type in ["noise", "x_start", "v"]
+    assert guidance_type in ["uncond", "classifier", "classifier-free"]
     return model_fn
 
 
