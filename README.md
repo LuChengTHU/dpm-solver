@@ -31,10 +31,10 @@ We support the following four types of diffusion models. You can set the model t
 
 | Model Type                                        | Training Objective                                           | Example Paper                                                      |
 | ------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| "noise": noise prediction model $\epsilon_\theta$ | $\mathbb{E}_{x_0,\epsilon,t}\left[\omega_1(t)\|\epsilon_\theta(x_t,t)-\epsilon\|_2^2\right]$ | [DDPM](https://arxiv.org/abs/2006.11239), [Stable-Diffusion](https://github.com/CompVis/stable-diffusion) |
-| "x_start": data prediction model $x_\theta$       | $\mathbb{E}_{x_0,\epsilon,t}\left[\omega_2(t)\|x_\theta(x_t,t)-x_0\|_2^2\right]$ | [DALL·E 2](https://arxiv.org/abs/2204.06125)                 |
-| "v": velocity prediction model $v_\theta$         | $\mathbb{E}_{x_0,\epsilon,t}\left[\omega_3(t)\|v_\theta(x_t,t)-(\alpha_t\epsilon - \sigma_t x_0)\|_2^2\right]$ | [Imagen Video](https://arxiv.org/abs/2210.02303)             |
-| "score": marginal score function $s_\theta$       | $\mathbb{E}_{x_0,\epsilon,t}\left[\omega_4(t)\|\sigma_t s_\theta(x_t,t)+\epsilon\|_2^2\right]$ | [ScoreSDE](https://arxiv.org/abs/2011.13456)                 |
+| "noise": noise prediction model $\epsilon_\theta$ | $E_{x_{0},\epsilon,t}\left[\omega_1(t)\|\|\epsilon_\theta(x_t,t)-\epsilon\|\|_2^2\right]$ | [DDPM](https://arxiv.org/abs/2006.11239), [Stable-Diffusion](https://github.com/CompVis/stable-diffusion) |
+| "x_start": data prediction model $x_\theta$       | $E_{x_0,\epsilon,t}\left[\omega_2(t)\|\|x_\theta(x_t,t)-x_0\|\|_2^2\right]$ | [DALL·E 2](https://arxiv.org/abs/2204.06125)                 |
+| "v": velocity prediction model $v_\theta$         | $E_{x_0,\epsilon,t}\left[\omega_3(t)\|\|v_\theta(x_t,t)-(\alpha_t\epsilon - \sigma_t x_0)\|\|_2^2\right]$ | [Imagen Video](https://arxiv.org/abs/2210.02303)             |
+| "score": marginal score function $s_\theta$       | $E_{x_0,\epsilon,t}\left[\omega_4(t)\|\|\sigma_t s_\theta(x_t,t)+\epsilon\|\|_2^2\right]$ | [ScoreSDE](https://arxiv.org/abs/2011.13456)                 |
 
 ## Sampling Types
 We support the following three types of sampling by diffusion models. You can set the argument `guidance_type` in the function `model_wrapper`.
