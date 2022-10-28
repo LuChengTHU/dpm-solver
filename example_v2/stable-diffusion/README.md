@@ -26,7 +26,13 @@ By default, this uses a guidance scale of `--scale 7.5` and renders images of si
 
 
 
+Diffrences between DDIM, PLMS and DPM-Solver:
 
+![sdm-1](../../assets/sdm-1.png)
+
+![sdm-2](../../assets/sdm-2.png)
+
+![sdm-3](../../assets/sdm-3.png)
 
 
 

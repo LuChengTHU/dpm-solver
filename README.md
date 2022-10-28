@@ -6,7 +6,13 @@ The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Pro
 
 DPM-Solver is a fast dedicated high-order solver for diffusion ODEs with the convergence order guarantee. DPM-Solver is suitable for both discrete-time and continuous-time diffusion models **without any further training**. Experimental results show that DPM-Solver can generate high-quality samples in **only 10 to 20** function evaluations on various datasets.
 
+[ADM](https://arxiv.org/abs/2105.05233) with DPM-Solver:
+
 ![DPM-Solver](assets/intro.png)
+
+[Stable-Diffusion](https://github.com/CompVis/stable-diffusion) with DPM-Solver:
+
+![sdm](assets/sdm-1.png)
 
 <br />
 
@@ -66,6 +72,12 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 
 <br />
 
+# Examples
+## Stable-Diffusion with DPM-Solver
+We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/example_v2/stable-diffusion). DPM-Solver can greatly accelerate the sampling speed of stable-diffusion.
+
+## Other Examples
+Coming soon...
 
 # Use DPM-Solver in your own code
 It is very easy to combine DPM-Solver with your own diffusion models. We support both Pytorch and JAX code. You can just copy the file `dpm_solver_pytorch.py` or `dpm_solver_jax.py` (The JAX code is cleaning and will be released soon) to your own code files and import it.
@@ -709,13 +721,8 @@ x_sample = dpm_solver.sample(
 
 <br />
 
-# Examples
-We also add a pytorch example and a JAX example. The documentations are coming soon.
-
-<br />
-
 # TODO List
-- [ ] Add stable-diffusion examples.
+- [x] Add stable-diffusion examples.
 - [ ] Documentation for example code.
 - [ ] Clean and add the JAX code example.
 - [ ] Add more explanations about DPM-Solver.
