@@ -436,7 +436,7 @@ class DPM_Solver:
         else:
             raise ValueError("Unsupported skip_type {}, need to be 'logSNR' or 'time_uniform' or 'time_quadratic'".format(skip_type))
 
-    def get_orders_for_singlestep_solver(self, steps, order):
+    def get_orders_and_timesteps_for_singlestep_solver(self, steps, order, skip_type, t_T, t_0, device):
         """
         Get the order of each step for sampling by the singlestep DPM-Solver.
 
@@ -458,6 +458,13 @@ class DPM_Solver:
         Args:
             order: A `int`. The max order for the solver (2 or 3).
             steps: A `int`. The total number of function evaluations (NFE).
+            skip_type: A `str`. The type for the spacing of the time steps. We support three types:
+                - 'logSNR': uniform logSNR for the time steps.
+                - 'time_uniform': uniform time for the time steps. (**Recommended for high-resolutional data**.)
+                - 'time_quadratic': quadratic time for the time steps. (Used in DDIM for low-resolutional data.)
+            t_T: A `float`. The starting time of the sampling (default is T).
+            t_0: A `float`. The ending time of the sampling (default is epsilon).
+            device: A torch device.
         Returns:
             orders: A list of the solver order of each step.
         """
@@ -469,18 +476,24 @@ class DPM_Solver:
                 orders = [3,] * (K - 1) + [1]
             else:
                 orders = [3,] * (K - 1) + [2]
-            return orders
         elif order == 2:
-            K = steps // 2
             if steps % 2 == 0:
+                K = steps // 2
                 orders = [2,] * K
             else:
-                orders = [2,] * K + [1]
-            return orders
+                K = steps // 2 + 1
+                orders = [2,] * (K - 1) + [1]
         elif order == 1:
-            return [1,] * steps
+            K = 1
+            orders = [1,] * steps
         else:
             raise ValueError("'order' must be '1' or '2' or '3'.")
+        if skip_type == 'logSNR':
+            # To reproduce the results in DPM-Solver paper
+            timesteps_outer = self.get_time_steps(skip_type, t_T, t_0, K, device)
+        else:
+            timesteps_outer = self.get_time_steps(skip_type, t_T, t_0, steps, device)[torch.cumsum(torch.tensor([0,] + orders)).to(device)]
+        return timesteps_outer, orders
 
     def denoise_fn(self, x, s):
         """
@@ -1077,21 +1090,20 @@ class DPM_Solver:
                         model_prev_list[-1] = self.model_fn(x, vec_t)
         elif method in ['singlestep', 'singlestep_fixed']:
             if method == 'singlestep':
-                orders = self.get_orders_for_singlestep_solver(steps=steps, order=order)
-                timesteps = self.get_time_steps(skip_type=skip_type, t_T=t_T, t_0=t_0, N=steps, device=device)
+                timesteps_outer, orders = self.get_orders_and_timesteps_for_singlestep_solver(steps=steps, order=order, skip_type=skip_type, t_T=t_T, t_0=t_0, device=device)
             elif method == 'singlestep_fixed':
                 K = steps // order
                 orders = [order,] * K
-                timesteps = self.get_time_steps(skip_type=skip_type, t_T=t_T, t_0=t_0, N=(K * order), device=device)
-            with torch.no_grad():
-                i = 0
-                for order in orders:
-                    vec_s, vec_t = timesteps[i].expand(x.shape[0]), timesteps[i + order].expand(x.shape[0])
-                    h = self.noise_schedule.marginal_lambda(timesteps[i + order]) - self.noise_schedule.marginal_lambda(timesteps[i])
-                    r1 = None if order <= 1 else (self.noise_schedule.marginal_lambda(timesteps[i + 1]) - self.noise_schedule.marginal_lambda(timesteps[i])) / h
-                    r2 = None if order <= 2 else (self.noise_schedule.marginal_lambda(timesteps[i + 2]) - self.noise_schedule.marginal_lambda(timesteps[i])) / h
-                    x = self.singlestep_dpm_solver_update(x, vec_s, vec_t, order, solver_type=solver_type, r1=r1, r2=r2)
-                    i += order
+                timesteps_outer = self.get_time_steps(skip_type=skip_type, t_T=t_T, t_0=t_0, N=K, device=device)
+            for i, order in enumerate(orders):
+                t_T_inner, t_0_inner = timesteps_outer[i], timesteps_outer[i + 1]
+                timesteps_inner = self.get_time_steps(skip_type=skip_type, t_T=t_T_inner.item(), t_0=t_0_inner.item(), N=order, device=device)
+                lambda_inner = self.noise_schedule.marginal_lambda(timesteps_inner)
+                vec_s, vec_t = t_T_inner.tile(x.shape[0]), t_0_inner.tile(x.shape[0])
+                h = lambda_inner[-1] - lambda_inner[0]
+                r1 = None if order <= 1 else (lambda_inner[1] - lambda_inner[0]) / h
+                r2 = None if order <= 2 else (lambda_inner[2] - lambda_inner[0]) / h
+                x = self.singlestep_dpm_solver_update(x, vec_s, vec_t, order, solver_type=solver_type, r1=r1, r2=r2)
         if denoise:
             x = self.denoise_fn(x, torch.ones((x.shape[0],)).to(device) * t_0)
         return x
