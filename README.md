@@ -80,7 +80,7 @@ We provide an [example of stable diffusion with DPM-Solver](https://github.com/L
 Coming soon...
 
 # Use DPM-Solver in your own code
-It is very easy to combine DPM-Solver with your own diffusion models. We support both Pytorch and JAX code. You can just copy the file `dpm_solver_pytorch.py` or `dpm_solver_jax.py` (The JAX code is cleaning and will be released soon) to your own code files and import it.
+It is very easy to combine DPM-Solver with your own diffusion models. We support both Pytorch and JAX code. You can just copy the file `dpm_solver_pytorch.py` or `dpm_solver_jax.py` to your own code files and import it.
 
 In each step, DPM-Solver needs to compute the corresponding $\alpha_t$, $\sigma_t$ and $\lambda_t$ of the noise schedule. We support the commonly-used variance preserving (VP) noise schedule for both discrete-time and continuous-time DPMs:
 
@@ -724,7 +724,7 @@ x_sample = dpm_solver.sample(
 # TODO List
 - [x] Add stable-diffusion examples.
 - [ ] Documentation for example code.
-- [ ] Clean and add the JAX code example.
+- [x] Clean and add the JAX code example.
 - [ ] Add more explanations about DPM-Solver.
 - [ ] Add VE type noise schedule.
 
