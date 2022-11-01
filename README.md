@@ -74,7 +74,10 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 
 # Examples
 ## Stable-Diffusion with DPM-Solver
-We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/example_v2/stable-diffusion). DPM-Solver can greatly accelerate the sampling speed of stable-diffusion.
+We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `example_v2/stable-diffusion`. DPM-Solver can greatly accelerate the sampling speed of the [original stable-diffusion](https://github.com/CompVis/stable-diffusion).
+
+## ScoreSDE with DPM-Solver
+We provide a [pytorch example](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/score_sde_pytorch) and a [JAX example](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/score_sde_jax) in `example_v2/` which apply DPM-Solver for [Yang Song's score_sde repo](https://github.com/yang-song/score_sde) on CIFAR-10.
 
 ## Other Examples
 Coming soon...
