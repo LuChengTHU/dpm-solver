@@ -1,0 +1,12 @@
+ml-collections==0.1.0
+tensorflow-gan==2.1.0
+tensorflow_io==0.22.0
+tensorflow_datasets==4.4.0
+tensorflow==2.7.0
+tensorflow-addons==0.15.0
+tensorboard==2.8.0
+tensorflow-probability==0.15.0
+absl-py==0.10.0
+torch>=1.7.0
+torchvision
+ninja
