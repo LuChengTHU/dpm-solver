@@ -1,6 +1,8 @@
 # Score-Based Generative Model with DPM-Solver
 
-We support the Jax version for DPM-Solver in this repo. The example command can be found in `sample.sh`. We used the `cifar10_ddpmpp_deep_continuous` pretrained checkpoint.
+We support the JAX version for DPM-Solver in this repo. The example command can be found in `sample.sh`. We used the `cifar10_ddpmpp_deep_continuous` pretrained `checkpoint_8` in [Yang Song's google drive](https://drive.google.com/drive/folders/1F74y6G_AGqPw8DG5uhdO_Kf9DCX1jKfL).
+
+The stats file for evaluating the FID on CIFAR-10 is the same as the original repo. You can download [`cifar10_stats.npz`](https://drive.google.com/file/d/14UB27-Spi8VjZYKST3ZcT8YVhAluiFWI/view?usp=sharing)  and save it to `assets/stats/`.
 
 
 <br />
