@@ -1,16 +1,16 @@
 # DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps
 
-The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://arxiv.org/abs/2206.00927) (**Neurips 2022 Oral**) by Cheng Lu, Yuhao Zhou, Fan Bao, Jianfei Chen, Chongxuan Li and Jun Zhu.
+The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://arxiv.org/abs/2206.00927) (**Neurips 2022 Oral**) and [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095) by Cheng Lu, Yuhao Zhou, Fan Bao, Jianfei Chen, Chongxuan Li and Jun Zhu.
 
 --------------------
 
-DPM-Solver is a fast dedicated high-order solver for diffusion ODEs with the convergence order guarantee. DPM-Solver is suitable for both discrete-time and continuous-time diffusion models **without any further training**. Experimental results show that DPM-Solver can generate high-quality samples in **only 10 to 20** function evaluations on various datasets.
+DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-order solver for diffusion ODEs with the convergence order guarantee. DPM-Solver is suitable for both discrete-time and continuous-time diffusion models **without any further training**. Experimental results show that DPM-Solver can generate high-quality samples in **only 10 to 20** function evaluations on various datasets.
 
 [ADM](https://arxiv.org/abs/2105.05233) with DPM-Solver:
 
 ![DPM-Solver](assets/intro.png)
 
-[Stable-Diffusion](https://github.com/CompVis/stable-diffusion) with DPM-Solver:
+[Stable-Diffusion](https://github.com/CompVis/stable-diffusion) with DPM-Solver++:
 
 ![sdm](assets/sdm-1.png)
 
@@ -65,10 +65,10 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 
 | Method                        | Supported Orders | Supporting Thresholding | Remark                                                      |
 | ----------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- |
-| noise-prediction, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3) |
+| noise-prediction, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2206.00927). |
 | noise-prediction, multistep  | 1, 2, 3          | No                   |                                                             |
 | data-prediction, singlestep        | 1, 2, 3          | Yes                  |                                                             |
-| data-prediction, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2).        |
+| data-prediction, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2). See [this paper](https://arxiv.org/abs/2211.01095).        |
 
 <br />
 
@@ -81,6 +81,8 @@ We provide a [pytorch example](https://github.com/LuChengTHU/dpm-solver/tree/mai
 
 ## Other Examples
 Coming soon...
+
+<br />
 
 # Use DPM-Solver in your own code
 It is very easy to combine DPM-Solver with your own diffusion models. We support both Pytorch and JAX code. You can just copy the file `dpm_solver_pytorch.py` or `dpm_solver_jax.py` to your own code files and import it.
@@ -726,9 +728,11 @@ x_sample = dpm_solver.sample(
 
 # TODO List
 - [x] Add stable-diffusion examples.
+- [ ] Support Diffusers.
 - [ ] Documentation for example code.
 - [x] Clean and add the JAX code example.
 - [ ] Add more explanations about DPM-Solver.
+- [ ] Add a small jupyter example. 
 - [ ] Add VE type noise schedule.
 
 
