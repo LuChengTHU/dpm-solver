@@ -30,6 +30,14 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
 
 <br />
 
+# Amazing Works with DPM-Solver
+- [DreamStudio](https://beta.dreamstudio.ai/home) with singlestep 2nd order DPM-Solver (the "k_dpm_2_ancestral" sampling method), implemented by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
+
+- [StableBoost](https://stableboost.ai/) with singlestep 2nd order DPM-Solver (the "k_dpm_2_ancestral" sampling method), implemented by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
+
+- TBD...
+
+<br />
 
 # Supported Models and Algorithms
 ## Models
