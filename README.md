@@ -65,9 +65,13 @@ We support the following three types of sampling by diffusion models. You can se
 
 
 ## Algorithms in DPM-Solver
-We support the following four algorithms. The algorithms with noise-prediction are referred to DPM-Solver w.r.t. the *noise prediction model*, and the algorithms with data-prediction are referred to DPM-Solver w.r.t. the *data prediction model*. We also support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487) for algorithms with data-prediction. The dynamic thresholding method can further improve the sample quality by pixel-space DPMs with large guidance scales.
+We support the following four algorithms. The algorithms with noise-prediction are referred to [DPM-Solver](https://arxiv.org/abs/2206.00927) which discretizing the integral w.r.t. the *noise prediction model*, and the algorithms with data-prediction are referred to [DPM-Solver++](https://arxiv.org/abs/2211.01095) which discretizing the *data prediction model*.
 
-Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model, and for algorithms with data-prediction we further convert the noise prediction model to the data prediction model inside the implementation of DPM-Solver.
+We also support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487) for algorithms with data-prediction. The dynamic thresholding method can further improve the sample quality by pixel-space DPMs with large guidance scales.
+
+Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model. The setting for `predict_x0` is for the algorithm (noise-prediction DPM-Solver or data-prediction DPM-Solver++), not for the model. In other words, even for `predict_x0=True`, you can still use the noise prediction model for your `model_fn` and the algorithm can work well.
+
+- In fact, we implement the algorithms with data-prediction by firstly converting the noise prediction model to the data prediction model and then use DPM-Solver++ to sample, and users do not need to care about it.
 
 The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the multistep solvers (i.e.  Adams-Bashforth-like solvers) are different. We recommend to use different solvers for different tasks.
 
@@ -80,7 +84,7 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 
 <br />
 
-# Examples
+# Code Examples
 ## Stable-Diffusion with DPM-Solver
 We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `example_v2/stable-diffusion`. DPM-Solver can greatly accelerate the sampling speed of the [original stable-diffusion](https://github.com/CompVis/stable-diffusion).
 
@@ -102,6 +106,61 @@ In each step, DPM-Solver needs to compute the corresponding $\alpha_t$, $\sigma_
 - For continuous-time DPMs, we support both linear schedule (as used in [DDPM](https://arxiv.org/abs/2006.11239) and [ScoreSDE](https://arxiv.org/abs/2011.13456)) and cosine schedule (as used in [improved-DDPM](https://arxiv.org/abs/2102.09672)) in the `NoiseScheduleVP` class.
 
 Moreover, DPM-Solver is designed for the continuous-time diffusion ODEs. For discrete-time diffusion models, we also implement a wrapper function to convert the discrete-time diffusion models to the continuous-time diffusion models in the `model_wrapper` function.
+
+<br />
+
+## Suggestions for Choosing the Hyperparameters
+If you want to find the best setting for accelerating the sampling procedure by your own diffusion models, we provide a reference guide here:
+
+1. **IMPORTANT**: First run 1000-step [DDIM](https://arxiv.org/abs/2010.02502) to check the sample quality of your model. **If the sample quality is poor, then DPM-Solver cannot improve it.** Please further check your model defination or training process.
+   
+   Reason: DDIM is the first-order special case of DPM-Solver (proved in [our paper](https://arxiv.org/abs/2206.00927)). So given the same noise sample at time $T$, the converged samples of DDIM and DPM-Solver are the same. DPM-Solver **can** accelerate the convergence, but **cannot** improve the converged sample quality.
+
+2. If 1000-step DDIM can generate quite good samples, then DPM-Solver can achieve a quite good sample quality within very few steps because it can greatly accelerate the convergence. You may want to further choose the detailed hyperparameters of DPM-Solver. Here we provide a comprehensive searching routine:
+
+    - Comparing `predict_x0=True` and `predict_x0=False`. Note that these settings are for the algorithm, not for the model. In other words, even for `predict_x0=True`, you can still use the noise prediction model (such as stable-diffusion) and the algorithm can work well.
+
+    - (Optional) Comparing `thresholding=True` and `thresholding=False`.
+    
+      **IMPORTANT**: our supported dynamic thresholding method is only valid for **pixel-space** diffusion models with `predict_x0=True`. For example, [Imagen](https://arxiv.org/abs/2205.11487) uses the dynamic thresholding method and greatly improves the sample quality. The thresholding method pushes the pixel-space samples into the bounded area, so it can generate reasonable images. However, for latent-space diffusion models (such as stable-diffusion), the thresholding method is **unsuitable** because the $x_0$ at time $0$ of the diffusion model is in fact the "latent variable" in the latent space and it is unbounded.
+
+    - Comparing `singlestep` or `multistep` methods.
+
+    - Comparing `order = 2, 3`. Note that the all the first-order versions are equivalent to DDIM, so you do not need to try it.
+
+    - Comparing `steps = 10, 15, 20, 25, 50, 100`. It depends on your computation resources and the need of sample quality.
+
+    - (Optional) Comparing the `time_uniform`, `logSNR` and `time_quadratic` for the skip type.
+
+        We empirically find that for high-resolutional images, the best setting is the `time_uniform`. So we recommend this setting and there is no need for extra searching. However, for low-resolutional images such as CIFAR-10, we empirically find that `logSNR` is the best setting.
+
+    - (Optional) Comparing `denoise=True` or `denoise=False`.
+  
+        Empirically, the `denoise=True` can improve the FID for low-resolutional images such as CIFAR-10. However, the influence of this method for high-resolutional images seem to be small. As the denoise method needs one additional function evaluation (i.e. one additional step), we do not recommend to use the denoise method for high-resolutional images.
+
+    The detailed pseudo code is like:
+
+    ```python
+    for predict_x0 in [True, False]:
+    # Optional, for thresholding in [True, False]:
+        dpm_solver = DPM_Solver(..., predict_x0=predict_x0) # ... means other arguments
+        for method in ['singlestep', 'multistep']:
+            for order in [2, 3]:
+                for steps in [10, 15, 20, 25, 50, 100]:
+                    sample = dpm_solver.sample(
+                        ..., # ... means other arguments
+                        method=method,
+                        order=order,
+                        steps=steps,
+                        # optional: skip_type='time_uniform' or 'logSNR' or 'time_quadratic',
+                        # optional: denoise=True or False
+                    )
+
+    ```
+
+    And then compare the samples to choose the best setting.
+
+Moreover, for unconditional sampling and guided sampling, we have some recommendation settings and code examples, which are listed in the following section.
 
 <br />
 
