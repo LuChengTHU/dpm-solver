@@ -16,7 +16,29 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
 
 <br />
 
+- [News](#news)
+- [Supported Models and Algorithms](#supported-models-and-algorithms)
+- [Code Examples](#code-examples)
+  * [Stable-Diffusion with DPM-Solver](#stable-diffusion-with-dpm-solver)
+  * [ScoreSDE with DPM-Solver](#scoresde-with-dpm-solver)
+  * [Other Examples](#other-examples)
+- [Use DPM-Solver in your own code](#use-dpm-solver-in-your-own-code)
+  * [Suggestions for Choosing the Hyperparameters](#suggestions-for-choosing-the-hyperparameters)
+  * [Suggestions for the Detailed Settings](#suggestions-for-the-detailed-settings)
+    + [Example: Unconditional Sampling by DPM-Solver](#example--unconditional-sampling-by-dpm-solver)
+    + [Example: Classifier Guidance Sampling by DPM-Solver](#example--classifier-guidance-sampling-by-dpm-solver)
+    + [Example: Classifier-Free Guidance Sampling by DPM-Solver](#example--classifier-free-guidance-sampling-by-dpm-solver)
+- [Documentation](#documentation)
+  * [1. Define the noise schedule.](#1-define-the-noise-schedule)
+  * [2. Wrap your model to a continuous-time noise predicition model.](#2-wrap-your-model-to-a-continuous-time-noise-predicition-model)
+  * [3. Define DPM-Solver](#3-define-dpm-solver)
+- [TODO List](#todo-list)
+- [References](#references)
+
 # News
+- DPM-Solver has been used in:
+    * [DreamStudio](https://beta.dreamstudio.ai/home) and [StableBoost](https://stableboost.ai/) (thanks for the implementations by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion)).
+
 - **2022-10-26**. We have updated the **DPM-Solver v2.0**, a more stable version for high-resolutional image synthesis tasks. We have the following upgrades:
     - We support the discrete-time DPMs by implementing a picewise linear interpolation of $\log\alpha_t$ for the `NoiseScheduleVP`.
     
@@ -27,15 +49,6 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
     - We support **new algorithms** for DPM-Solver, which greatly improve the high-resolutional image sample quality by guided sampling.
         - We support both the noise prediction model $\epsilon_\theta(x_t,t)$ and the data prediction model $x_\theta(x_t,t)$. For the data prediction model, we further support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487).
         - We support both *singlestep* solver (i.e. Runge-Kutta-like solver) and *multistep* solver (i.e. Adams-Bashforth-like solver) for DPM-Solver, including order 1, 2, 3.
-
-<br />
-
-# Amazing Works with DPM-Solver
-- [DreamStudio](https://beta.dreamstudio.ai/home) with singlestep 2nd order DPM-Solver (the "k_dpm_2_ancestral" sampling method), implemented by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
-
-- [StableBoost](https://stableboost.ai/) with singlestep 2nd order DPM-Solver (the "k_dpm_2_ancestral" sampling method), implemented by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
-
-- TBD...
 
 <br />
 
@@ -814,6 +827,13 @@ If you find the code useful for your research, please consider citing
   title={DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps},
   author={Lu, Cheng and Zhou, Yuhao and Bao, Fan and Chen, Jianfei and Li, Chongxuan and Zhu, Jun},
   journal={arXiv preprint arXiv:2206.00927},
+  year={2022}
+}
+
+@article{lu2022dpm,
+  title={DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models},
+  author={Lu, Cheng and Zhou, Yuhao and Bao, Fan and Chen, Jianfei and Li, Chongxuan and Zhu, Jun},
+  journal={arXiv preprint arXiv:2211.01095},
   year={2022}
 }
 ```
