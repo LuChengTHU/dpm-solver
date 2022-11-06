@@ -148,9 +148,9 @@ If you want to find the best setting for accelerating the sampling procedure by 
 
         We empirically find that for high-resolutional images, the best setting is the `time_uniform`. So we recommend this setting and there is no need for extra searching. However, for low-resolutional images such as CIFAR-10, we empirically find that `logSNR` is the best setting.
 
-    - (Optional) Comparing `denoise=True` or `denoise=False`.
+    - (Optional) Comparing `denoise_to_zero=True` or `denoise_to_zero=False`.
   
-        Empirically, the `denoise=True` can improve the FID for low-resolutional images such as CIFAR-10. However, the influence of this method for high-resolutional images seem to be small. As the denoise method needs one additional function evaluation (i.e. one additional step), we do not recommend to use the denoise method for high-resolutional images.
+        Empirically, the `denoise_to_zero=True` can improve the FID for low-resolutional images such as CIFAR-10. However, the influence of this method for high-resolutional images seem to be small. As the denoise_to_zero method needs one additional function evaluation (i.e. one additional step), we do not recommend to use the denoise_to_zero method for high-resolutional images.
 
     The detailed pseudo code is like:
 
@@ -167,7 +167,7 @@ If you want to find the best setting for accelerating the sampling procedure by 
                         order=order,
                         steps=steps,
                         # optional: skip_type='time_uniform' or 'logSNR' or 'time_quadratic',
-                        # optional: denoise=True or False
+                        # optional: denoise_to_zero=True or False
                     )
 
     ```
