@@ -495,7 +495,7 @@ class DPM_Solver:
             timesteps_outer = self.get_time_steps(skip_type, t_T, t_0, steps, device)[torch.cumsum(torch.tensor([0,] + orders)).to(device)]
         return timesteps_outer, orders
 
-    def denoise_fn(self, x, s):
+    def denoise_to_zero_fn(self, x, s):
         """
         Denoise at the final step, which is equivalent to solve the ODE from lambda_s to infty by first-order discretization. 
         """
@@ -963,8 +963,8 @@ class DPM_Solver:
         return x
 
     def sample(self, x, steps=20, t_start=None, t_end=None, order=3, skip_type='time_uniform',
-        method='singlestep', denoise=False, solver_type='dpm_solver', atol=0.0078,
-        rtol=0.05,
+        method='singlestep', lower_order_final=True, denoise_to_zero=False, solver_type='dpm_solver',
+        atol=0.0078, rtol=0.05,
     ):
         """
         Compute the sample at time `t_end` by DPM-Solver, given the initial `x` at time `t_start`.
@@ -1048,8 +1048,19 @@ class DPM_Solver:
             order: A `int`. The order of DPM-Solver.
             skip_type: A `str`. The type for the spacing of the time steps. 'time_uniform' or 'logSNR' or 'time_quadratic'.
             method: A `str`. The method for sampling. 'singlestep' or 'multistep' or 'singlestep_fixed' or 'adaptive'.
-            denoise: A `bool`. Whether to denoise at the final step. Default is False.
-                If `denoise` is True, the total NFE is (`steps` + 1).
+            denoise_to_zero: A `bool`. Whether to denoise to time 0 at the final step.
+                Default is `False`. If `denoise_to_zero` is `True`, the total NFE is (`steps` + 1).
+
+                This trick is firstly proposed by DDPM (https://arxiv.org/abs/2006.11239) and
+                score_sde (https://arxiv.org/abs/2011.13456). Such trick can improve the FID
+                for diffusion models sampling by diffusion SDEs for low-resolutional images
+                (such as CIFAR-10). However, we observed that such trick does not matter for
+                high-resolutional images. As it needs an additional NFE, we do not recommend
+                it for high-resolutional images.
+            lower_order_final: A `bool`. Whether to use lower order solvers at the final steps.
+                Only valid for `method=multistep` and `steps < 15`. We empirically find that
+                this trick is a key to stabilizing the sampling by DPM-Solver with very few steps
+                (especially for steps <= 10). So we recommend to set it to be `True`.
             solver_type: A `str`. The taylor expansion type for the solver. `dpm_solver` or `taylor`. We recommend `dpm_solver`.
             atol: A `float`. The absolute tolerance of the adaptive step size solver. Valid when `method` == 'adaptive'.
             rtol: A `float`. The relative tolerance of the adaptive step size solver. Valid when `method` == 'adaptive'.
@@ -1080,7 +1091,11 @@ class DPM_Solver:
                 # Compute the remaining values by `order`-th order multistep DPM-Solver.
                 for step in range(order, steps + 1):
                     vec_t = timesteps[step].expand(x.shape[0])
-                    x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, vec_t, order, solver_type=solver_type)
+                    if lower_order_final and steps < 15:
+                        step_order = min(order, steps + 1 - step)
+                    else:
+                        step_order = order
+                    x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, vec_t, step_order, solver_type=solver_type)
                     for i in range(order - 1):
                         t_prev_list[i] = t_prev_list[i + 1]
                         model_prev_list[i] = model_prev_list[i + 1]
@@ -1104,8 +1119,8 @@ class DPM_Solver:
                 r1 = None if order <= 1 else (lambda_inner[1] - lambda_inner[0]) / h
                 r2 = None if order <= 2 else (lambda_inner[2] - lambda_inner[0]) / h
                 x = self.singlestep_dpm_solver_update(x, vec_s, vec_t, order, solver_type=solver_type, r1=r1, r2=r2)
-        if denoise:
-            x = self.denoise_fn(x, torch.ones((x.shape[0],)).to(device) * t_0)
+        if denoise_to_zero:
+            x = self.denoise_to_zero_fn(x, torch.ones((x.shape[0],)).to(device) * t_0)
         return x
 
 
