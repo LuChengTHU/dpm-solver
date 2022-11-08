@@ -4,6 +4,10 @@ The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Pro
 
 --------------------
 
+An [online demo](https://huggingface.co/spaces/LuChengTHU/dpmsolver_sdm) for DPM-Solver with stable-diffusion. Many thanks for the help and hardware resource supporting by HuggingFace 🤗.
+
+--------------------
+
 DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-order solver for diffusion ODEs with the convergence order guarantee. DPM-Solver is suitable for both discrete-time and continuous-time diffusion models **without any further training**. Experimental results show that DPM-Solver can generate high-quality samples in **only 10 to 20** function evaluations on various datasets.
 
 [ADM](https://arxiv.org/abs/2105.05233) with DPM-Solver:
@@ -40,6 +44,8 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
     * [DreamStudio](https://beta.dreamstudio.ai/home) and [StableBoost](https://stableboost.ai/) (thanks for the implementations by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion)).
     * [Stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui), which supports both DPM-Solver and DPM-Solver++. DPM-Solver++2M is the fastest solver currently. Also many Thanks to [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
     * [Diffusers](https://github.com/huggingface/diffusers), a widely-used library for diffusion models.
+
+- **2022-11-08**. We provide an [online demo](https://huggingface.co/spaces/LuChengTHU/dpmsolver_sdm) for DPM-Solver with stable-diffusion. Many thanks for the help and harware resource support by HuggingFace 🤗!
 
 - **2022-11-07**. Happy to announce that the multistep DPM-Solver has been supported by [diffusers](https://github.com/huggingface/diffusers)! Thanks for all the efforts of huggingface team (and me ^_^). Check [this PR](https://github.com/huggingface/diffusers/pull/1132) for details.
 
