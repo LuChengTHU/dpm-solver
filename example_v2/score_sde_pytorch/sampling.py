@@ -548,7 +548,7 @@ def get_dpm_solver_sampler(sde, shape, inverse_scaler, steps=10, eps=1e-3,
         order=order,
         skip_type=skip_type,
         method=method,
-        denoise=denoise,
+        denoise_to_zero=denoise,
         atol=atol,
         rtol=rtol,
       )
