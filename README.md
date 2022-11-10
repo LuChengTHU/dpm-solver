@@ -42,8 +42,9 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
 # News
 - DPM-Solver has been used in:
     * [DreamStudio](https://beta.dreamstudio.ai/home) and [StableBoost](https://stableboost.ai/) (thanks for the implementations by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion)).
-    * [Stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui), which supports both DPM-Solver and DPM-Solver++. DPM-Solver++2M is the fastest solver currently. Also many Thanks to [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
     * [Diffusers](https://github.com/huggingface/diffusers), a widely-used library for diffusion models.
+    * [Stable-Diffusion Online Demo](https://huggingface.co/spaces/runwayml/stable-diffusion-v1-5) on HuggingFace, which uses DPM-Solver in [Diffusers](https://github.com/huggingface/diffusers).
+    * [Stable-Diffusion-WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui), which supports both DPM-Solver and DPM-Solver++. DPM-Solver++2M is the fastest solver currently. Also many Thanks to [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
 
 - **2022-11-11**. The [official demo of stable-diffusion](https://huggingface.co/spaces/runwayml/stable-diffusion-v1-5) in HuggingFace Spaces 🤗 uses DPM-Solver and runs twice as fast! (From 50 steps to 25 steps.) It can generate 8 images within **only 4 seconds** using JAX on TPUv2-8. Check [this twitter](https://twitter.com/pcuenq/status/1590665645233881089).
 
