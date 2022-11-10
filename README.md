@@ -45,6 +45,8 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
     * [Stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui), which supports both DPM-Solver and DPM-Solver++. DPM-Solver++2M is the fastest solver currently. Also many Thanks to [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
     * [Diffusers](https://github.com/huggingface/diffusers), a widely-used library for diffusion models.
 
+- **2022-11-11**. The [official demo of stable-diffusion](https://huggingface.co/spaces/runwayml/stable-diffusion-v1-5) in HuggingFace Spaces 🤗 uses DPM-Solver and runs twice as fast! (From 50 steps to 25 steps.) It can generate 8 images within **only 4 seconds** using JAX on TPUv2-8. Check [this twitter](https://twitter.com/pcuenq/status/1590665645233881089).
+
 - **2022-11-08**. We provide an [online demo](https://huggingface.co/spaces/LuChengTHU/dpmsolver_sdm) for DPM-Solver with stable-diffusion. Many thanks for the help and harware resource support by HuggingFace 🤗!
 
 - **2022-11-07**. Happy to announce that the multistep DPM-Solver has been supported by [diffusers](https://github.com/huggingface/diffusers)! Thanks for all the efforts of huggingface team (and me ^_^). Check [this PR](https://github.com/huggingface/diffusers/pull/1132) for details.
