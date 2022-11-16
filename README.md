@@ -842,11 +842,4 @@ If you find the code useful for your research, please consider citing
   journal={arXiv preprint arXiv:2206.00927},
   year={2022}
 }
-
-@article{lu2022dpm,
-  title={DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models},
-  author={Lu, Cheng and Zhou, Yuhao and Bao, Fan and Chen, Jianfei and Li, Chongxuan and Zhu, Jun},
-  journal={arXiv preprint arXiv:2211.01095},
-  year={2022}
-}
 ```
