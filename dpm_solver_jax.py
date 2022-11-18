@@ -47,7 +47,7 @@ class NoiseScheduleVP:
                 betas: A `jnp.DeviceArray`. The beta array for the discrete-time DPM. (See the original DDPM paper for details)
                 alphas_cumprod: A `jnp.DeviceArray`. The cumprod alphas for the discrete-time DPM. (See the original DDPM paper for details)
 
-            Note that we always have alphas_cumprod = cumprod(betas). Therefore, we only need to set one of `betas` and `alphas_cumprod`.
+            Note that we always have alphas_cumprod = cumprod(1 - betas). Therefore, we only need to set one of `betas` and `alphas_cumprod`.
 
             **Important**:  Please pay special attention for the args for `alphas_cumprod`:
                 The `alphas_cumprod` is the \hat{alpha_n} arrays in the notations of DDPM. Specifically, DDPMs assume that
