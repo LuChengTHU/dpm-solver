@@ -46,7 +46,7 @@ class NoiseScheduleVP:
                 betas: A `torch.Tensor`. The beta array for the discrete-time DPM. (See the original DDPM paper for details)
                 alphas_cumprod: A `torch.Tensor`. The cumprod alphas for the discrete-time DPM. (See the original DDPM paper for details)
 
-            Note that we always have alphas_cumprod = cumprod(betas). Therefore, we only need to set one of `betas` and `alphas_cumprod`.
+            Note that we always have alphas_cumprod = cumprod(1 - betas). Therefore, we only need to set one of `betas` and `alphas_cumprod`.
 
             **Important**:  Please pay special attention for the args for `alphas_cumprod`:
                 The `alphas_cumprod` is the \hat{alpha_n} arrays in the notations of DDPM. Specifically, DDPMs assume that
@@ -770,8 +770,8 @@ class DPM_Solver:
             raise ValueError("'solver_type' must be either 'dpm_solver' or 'taylor', got {}".format(solver_type))
         ns = self.noise_schedule
         dims = x.dim()
-        model_prev_1, model_prev_0 = model_prev_list
-        t_prev_1, t_prev_0 = t_prev_list
+        model_prev_1, model_prev_0 = model_prev_list[-2], model_prev_list[-1]
+        t_prev_1, t_prev_0 = t_prev_list[-2], t_prev_list[-1]
         lambda_prev_1, lambda_prev_0, lambda_t = ns.marginal_lambda(t_prev_1), ns.marginal_lambda(t_prev_0), ns.marginal_lambda(t)
         log_alpha_prev_0, log_alpha_t = ns.marginal_log_mean_coeff(t_prev_0), ns.marginal_log_mean_coeff(t)
         sigma_prev_0, sigma_t = ns.marginal_std(t_prev_0), ns.marginal_std(t)
