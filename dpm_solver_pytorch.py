@@ -105,8 +105,8 @@ class NoiseScheduleVP:
                 log_alphas = 0.5 * torch.log(alphas_cumprod)
             self.total_N = len(log_alphas)
             self.T = 1.
-            self.t_array = torch.linspace(0., 1., self.total_N + 1)[1:].reshape((1, -1)).astype(dtype)
-            self.log_alpha_array = log_alphas.reshape((1, -1,)).astype(dtype)
+            self.t_array = torch.linspace(0., 1., self.total_N + 1)[1:].reshape((1, -1)).to(dtype=dtype)
+            self.log_alpha_array = log_alphas.reshape((1, -1,)).to(dtype=dtype)
         else:
             self.total_N = 1000
             self.beta_0 = continuous_beta_0
