@@ -965,6 +965,21 @@ class DPM_Solver:
         print('adaptive solver nfe', nfe)
         return x
 
+    def add_noise(self, x, t):
+        """
+        Compute the noised input xt = alpha_t * x + sigma_t * noise. 
+
+        Args:
+            x: A `torch.Tensor` with shape `(batch_size, *shape)`.
+            t: A `torch.Tensor` with shape `(t_size,)`.
+        Returns:
+            xt with shape `(t_size, batch_size, *shape)`.
+        """
+        alpha_t, sigma_t = self.noise_schedule.marginal_alpha(t), self.noise_schedule.marginal_std(t)
+        noise = torch.randn((t.shape[0], *x.shape))
+        x = x.reshape((-1, *x.shape))
+        return expand_dims(alpha_t, x.dim()) * x + expand_dims(sigma_t, x.dim()) * noise
+
     def sample(self, x, steps=20, t_start=None, t_end=None, order=2, skip_type='time_uniform',
         method='multistep', lower_order_final=True, denoise_to_zero=False, solver_type='dpm_solver',
         atol=0.0078, rtol=0.05, return_intermediate=False, corrector_fn=None,
