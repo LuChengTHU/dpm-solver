@@ -42,9 +42,10 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
 # News
 - DPM-Solver has been used in:
     * [DreamStudio](https://beta.dreamstudio.ai/home) and [StableBoost](https://stableboost.ai/) (thanks for the implementations by [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion)).
-    * [Diffusers](https://github.com/huggingface/diffusers), a widely-used library for diffusion models.
-    * [Stable-Diffusion Online Demo](https://huggingface.co/spaces/runwayml/stable-diffusion-v1-5) on HuggingFace, which uses DPM-Solver in [Diffusers](https://github.com/huggingface/diffusers).
     * [Stable-Diffusion-WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui), which supports both DPM-Solver and DPM-Solver++. DPM-Solver++2M is the fastest solver currently. Also many Thanks to [Katherine Crowson's k-diffusion repo](https://github.com/crowsonkb/k-diffusion).
+    * [Diffusers](https://github.com/huggingface/diffusers), a widely-used library for diffusion models.
+    * [Stable-Diffusion v2 Official Code](https://github.com/CompVis/stable-diffusion) and [Stable-Diffusion v1 Official Code](https://github.com/CompVis/stable-diffusion). Check [this pull request](https://github.com/CompVis/stable-diffusion/pull/440).
+    * [Stable-Diffusion v2.0 Online Demo](https://huggingface.co/spaces/stabilityai/stable-diffusion) and [Stable-Diffusion v1.5 Online Demo](https://huggingface.co/spaces/runwayml/stable-diffusion-v1-5) on HuggingFace, which uses DPM-Solver in [Diffusers](https://github.com/huggingface/diffusers).
 
 - **2022-11-11**. The [official demo of stable-diffusion](https://huggingface.co/spaces/runwayml/stable-diffusion-v1-5) in HuggingFace Spaces 🤗 uses DPM-Solver and runs twice as fast! (From 50 steps to 25 steps.) It can generate 8 images within **only 4 seconds** using JAX on TPUv2-8. Check [this twitter](https://twitter.com/pcuenq/status/1590665645233881089).
 
@@ -821,7 +822,7 @@ x_sample = dpm_solver.sample(
 
 # TODO List
 - [x] Add stable-diffusion examples.
-- [ ] Support Diffusers.
+- [x] Support Diffusers.
 - [ ] Documentation for example code.
 - [x] Clean and add the JAX code example.
 - [ ] Add more explanations about DPM-Solver.
