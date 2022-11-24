@@ -106,7 +106,7 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 | ----------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- |
 | DPM-Solver, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2206.00927). |
 | DPM-Solver, multistep  | 1, 2, 3          | No                   |                                                             |
-| DPM-Solver++, singlestep        | 1, 2, 3          | Yes                  |                                                             |
+| DPM-Solver++, singlestep        | 1, 2, 3          | Yes                  | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2211.01095).                                                            |
 | DPM-Solver++, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2). See [this paper](https://arxiv.org/abs/2211.01095).        |
 
 <br />
