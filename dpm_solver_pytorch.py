@@ -976,7 +976,7 @@ class DPM_Solver:
             xt with shape `(t_size, batch_size, *shape)`.
         """
         alpha_t, sigma_t = self.noise_schedule.marginal_alpha(t), self.noise_schedule.marginal_std(t)
-        noise = torch.randn((t.shape[0], *x.shape), device=x.device)
+        noise = torch.randn((t.shape[0], *x.shape), device=x.device, dtype=x.dtype)
         x = x.reshape((-1, *x.shape))
         return expand_dims(alpha_t, x.dim()) * x + expand_dims(sigma_t, x.dim()) * noise
 
