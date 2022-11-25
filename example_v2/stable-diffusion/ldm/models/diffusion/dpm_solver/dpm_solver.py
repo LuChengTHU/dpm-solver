@@ -1181,12 +1181,16 @@ class DPM_Solver:
                 t = timesteps[step]
                 t_prev_list = [t]
                 model_prev_list = [self.model_fn(x, t)]
+                if self.correcting_xt_fn is not None:
+                    x = self.correcting_xt_fn(x, t, step)
+                if return_intermediate:
+                    intermediates.append(x)
                 # Init the first `order` values by lower order multistep DPM-Solver.
                 for step in range(1, order):
                     t = timesteps[step]
                     x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, t, step, solver_type=solver_type)
                     if self.correcting_xt_fn is not None:
-                        x = self.correcting_xt_fn(x, t, step - 1)
+                        x = self.correcting_xt_fn(x, t, step)
                     if return_intermediate:
                         intermediates.append(x)
                     t_prev_list.append(t)
@@ -1201,7 +1205,7 @@ class DPM_Solver:
                         step_order = order
                     x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, t, step_order, solver_type=solver_type)
                     if self.correcting_xt_fn is not None:
-                        x = self.correcting_xt_fn(x, t, step - 1)
+                        x = self.correcting_xt_fn(x, t, step)
                     if return_intermediate:
                         intermediates.append(x)
                     for i in range(order - 1):
@@ -1227,7 +1231,7 @@ class DPM_Solver:
                     r2 = None if order <= 2 else (lambda_inner[2] - lambda_inner[0]) / h
                     x = self.singlestep_dpm_solver_update(x, s, t, order, solver_type=solver_type, r1=r1, r2=r2)
                     if self.correcting_xt_fn is not None:
-                        x = self.correcting_xt_fn(x, t, step - 1)
+                        x = self.correcting_xt_fn(x, t, step)
                     if return_intermediate:
                         intermediates.append(x)
             else:
@@ -1236,7 +1240,7 @@ class DPM_Solver:
                 t = torch.ones((1,)).to(device) * t_0
                 x = self.denoise_to_zero_fn(x, t)
                 if self.correcting_xt_fn is not None:
-                    x = self.correcting_xt_fn(x, t, step)
+                    x = self.correcting_xt_fn(x, t, step + 1)
                 if return_intermediate:
                     intermediates.append(x)
         if return_intermediate:
