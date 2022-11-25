@@ -112,16 +112,18 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 <br />
 
 # Code Examples
-## Stable-Diffusion with DPM-Solver
+## Text-to-Image by Stable-Diffusion with DPM-Solver
 We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `example_v2/stable-diffusion`. DPM-Solver can greatly accelerate the sampling speed of the [original stable-diffusion](https://github.com/CompVis/stable-diffusion).
+
+## Image Editing (DiffEdit) by Stable-Diffusion with DPM-Solver
+We provide an [example of DiffEdit](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `scripts/diffedit_inpaint.ipynb`, the idea of [DiffEdit](https://arxiv.org/abs/2210.11427) can be general decribe as, using DDIM to get a 
+invertable latent serise, then apply different prompt for inpainting (controled by auto generated mask). 
+
+We could easily accelerate such editing / inpainting by DPM-Solver **in only 20 steps**.
+
 
 ## ScoreSDE with DPM-Solver
 We provide a [pytorch example](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/score_sde_pytorch) and a [JAX example](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/score_sde_jax) in `example_v2/` which apply DPM-Solver for [Yang Song's score_sde repo](https://github.com/yang-song/score_sde) on CIFAR-10.
-
-## DiffEdit with DPM-Solver and Stable-Diffusion
-We provide an [example of DiffEdit](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `scripts/diffedit_inpaint.ipynb`, the idea of [paper](https://arxiv.org/abs/2210.11427) can be general decribe as, using DDIM to get a 
-invertable latent serise, then apply different prompt to edit(controled by auto generated mask). 
-We could easily record invertable latent serise by api of dpm solver in only 20 steps.
 
 
 ## Other Examples

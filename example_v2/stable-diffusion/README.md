@@ -36,6 +36,12 @@ Diffrences between DDIM, PLMS and DPM-Solver:
 
 
 
+# Image Inpainting / Editing with DPM-Solver
+**DPM-Solver can also greatly accelerate the image-to-image inpainting by stable-diffusion**.
+
+We provide a reference sampling script in `scripts/diffedit_inpaint.ipynb` to implement [DiffEdit](https://arxiv.org/abs/2210.11427) by DPM-Solver, which can use an input prompt to edit an input image, with an automatically generated mask.
+
+We could easily accelerate such editing / inpainting by DPM-Solver **in only 20 steps**.
 
 
 
