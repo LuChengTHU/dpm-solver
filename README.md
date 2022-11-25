@@ -61,7 +61,7 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
       - We support four types of diffusion models: noise prediction model, data prediction model, velocity prediction model, score function.
       - We support unconditional sampling, classifier guidance sampling and classifier-free guidance sampling.
     - We support **new algorithms** for DPM-Solver, which greatly improve the high-resolutional image sample quality by guided sampling.
-        - We support both the noise prediction model $\epsilon_\theta(x_t,t)$ and the data prediction model $x_\theta(x_t,t)$. For the data prediction model, we further support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487).
+        - We support both [DPM-Solver](https://arxiv.org/abs/2206.00927) and [DPM-Solver++](https://arxiv.org/abs/2211.01095). For DPM-Solver++, we further support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487).
         - We support both *singlestep* solver (i.e. Runge-Kutta-like solver) and *multistep* solver (i.e. Adams-Bashforth-like solver) for DPM-Solver, including order 1, 2, 3.
 
 <br />
@@ -92,13 +92,13 @@ We support the following three types of sampling by diffusion models. You can se
 
 
 ## Algorithms in DPM-Solver
-We support the following four algorithms. The algorithms with noise-prediction are referred to [DPM-Solver](https://arxiv.org/abs/2206.00927) which discretizing the integral w.r.t. the *noise prediction model*, and the algorithms with data-prediction are referred to [DPM-Solver++](https://arxiv.org/abs/2211.01095) which discretizing the *data prediction model*.
+We support the following four algorithms. The algorithms are [DPM-Solver](https://arxiv.org/abs/2206.00927) and [DPM-Solver++](https://arxiv.org/abs/2211.01095).
 
 We also support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487) for algorithms with data-prediction. The dynamic thresholding method can further improve the sample quality by pixel-space DPMs with large guidance scales.
 
-Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model. The setting for `predict_x0` is for the algorithm (noise-prediction DPM-Solver or data-prediction DPM-Solver++), not for the model. In other words, even for `predict_x0=True`, you can still use the noise prediction model for your `model_fn` and the algorithm can work well.
+Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model. The setting for `algorithm_type` is for the algorithm (DPM-Solver or DPM-Solver++), not for the model. In other words, both DPM-Solver and DPM-Solver++ is suitable for all the four model types.
 
-- In fact, we implement the algorithms with data-prediction by firstly converting the noise prediction model to the data prediction model and then use DPM-Solver++ to sample, and users do not need to care about it.
+- In fact, we implement the algorithms of DPM-Solver++ by firstly converting the noise prediction model to the data prediction model and then use DPM-Solver++ to sample, and users do not need to care about it.
 
 The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the multistep solvers (i.e.  Adams-Bashforth-like solvers) are different. We recommend to use different solvers for different tasks.
 
@@ -116,7 +116,7 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `example_v2/stable-diffusion`. DPM-Solver can greatly accelerate the sampling speed of the [original stable-diffusion](https://github.com/CompVis/stable-diffusion).
 
 ## Image Editing (DiffEdit) by Stable-Diffusion with DPM-Solver
-We provide an [example of DiffEdit](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `scripts/diffedit_inpaint.ipynb`, the idea of [DiffEdit](https://arxiv.org/abs/2210.11427) can be general decribe as, using DDIM to get a 
+We provide an [example of DiffEdit with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion), which can be used for image editing. The idea of [DiffEdit](https://arxiv.org/abs/2210.11427) can be general decribe as, using DDIM to get a 
 invertable latent serise, then apply different prompt for inpainting (controled by auto generated mask). 
 
 We could easily accelerate such editing / inpainting by DPM-Solver **in only 20 steps**.
@@ -153,11 +153,11 @@ If you want to find the best setting for accelerating the sampling procedure by 
 
 2. If 1000-step DDIM can generate quite good samples, then DPM-Solver can achieve a quite good sample quality within very few steps because it can greatly accelerate the convergence. You may want to further choose the detailed hyperparameters of DPM-Solver. Here we provide a comprehensive searching routine:
 
-    - Comparing `predict_x0=True` and `predict_x0=False`. Note that these settings are for the algorithm, not for the model. In other words, even for `predict_x0=True`, you can still use the noise prediction model (such as stable-diffusion) and the algorithm can work well.
+    - Comparing `algorithm_type="dpmsolver"` and `algorithm_type="dpmsolver++"`. Note that these settings are for the algorithm, not for the model. In other words, even for `algorithm_type="dpmsolver++`, you can still use the noise prediction model (such as stable-diffusion) and the algorithm can work well.
 
-    - (Optional) Comparing `thresholding=True` and `thresholding=False`.
+    - (Optional) Comparing with / without dynamic thresholding.
     
-      **IMPORTANT**: our supported dynamic thresholding method is only valid for **pixel-space** diffusion models with `predict_x0=True`. For example, [Imagen](https://arxiv.org/abs/2205.11487) uses the dynamic thresholding method and greatly improves the sample quality. The thresholding method pushes the pixel-space samples into the bounded area, so it can generate reasonable images. However, for latent-space diffusion models (such as stable-diffusion), the thresholding method is **unsuitable** because the $x_0$ at time $0$ of the diffusion model is in fact the "latent variable" in the latent space and it is unbounded.
+      **IMPORTANT**: our supported dynamic thresholding method is only valid for **pixel-space** diffusion models with `algorithm_type="dpmsolver++`. For example, [Imagen](https://arxiv.org/abs/2205.11487) uses the dynamic thresholding method and greatly improves the sample quality. The thresholding method pushes the pixel-space samples into the bounded area, so it can generate reasonable images. However, for latent-space diffusion models (such as stable-diffusion), the thresholding method is **unsuitable** because the $x_0$ at time $0$ of the diffusion model is in fact the "latent variable" in the latent space and it is unbounded.
 
     - Comparing `singlestep` or `multistep` methods.
 
@@ -176,9 +176,9 @@ If you want to find the best setting for accelerating the sampling procedure by 
     The detailed pseudo code is like:
 
     ```python
-    for predict_x0 in [True, False]:
-    # Optional, for thresholding in [True, False]:
-        dpm_solver = DPM_Solver(..., predict_x0=predict_x0) # ... means other arguments
+    for algorithm_type in ["dpmsolver", "dpmsolver++"]:
+    # Optional, for correcting_x0_fn in [None, "dynamic_thresholding"]:
+        dpm_solver = DPM_Solver(..., algorithm_type=algorithm_type) # ... means other arguments
         for method in ['singlestep', 'multistep']:
             for order in [2, 3]:
                 for steps in [10, 15, 20, 25, 50, 100]:
@@ -202,13 +202,15 @@ Moreover, for unconditional sampling and guided sampling, we have some recommend
 ## Suggestions for the Detailed Settings
 We recommend to use the following two types of solvers for different tasks:
 
-- 3rd-order (noise-prediction + singlestep) DPM-Solver:
+- 3rd-order singlestep DPM-Solver:
     ```python
     ## Define the model and noise schedule (see examples below) 
     ## ....
 
     ## Define DPM-Solver and compute the sample.
-    dpm_solver = DPM_Solver(model_fn, noise_schedule)
+    dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
+    ## Or also try:
+    ## dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver")
 
     ## Steps in [10, 20] can generate quite good samples.
     ## And steps = 20 can almost converge.
@@ -221,14 +223,14 @@ We recommend to use the following two types of solvers for different tasks:
     )
     ```
 
-- 2nd-order (data-prediction + multistep) DPM-Solver:
+- 2nd-order multistep DPM-Solver:
     - For general DPMs (e.g. latent-space DPMs):
         ```python
         ## Define the model and noise schedule (see examples below) 
         ## ....
 
         ## Define DPM-Solver and compute the sample.
-        dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+        dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
         ## Steps in [10, 20] can generate quite good samples.
         ## And steps = 20 can almost converge.
@@ -240,14 +242,14 @@ We recommend to use the following two types of solvers for different tasks:
             method="multistep",
         )
         ```
-    - For DPMs trained on bounded data (e.g. pixel-space images), we further support the *dynamic thresholding* method introduced by [Imagen](https://arxiv.org/abs/2205.11487) by setting `thresholding = True`. The dynamic thresholding method can greatly improve the sample quality of pixel-space DPMs by guided sampling with large guidance scales.
+    - For DPMs trained on bounded data (e.g. pixel-space images), we further support the *dynamic thresholding* method introduced by [Imagen](https://arxiv.org/abs/2205.11487) by setting `correcting_x0_fn = "dynamic_thresholding"`. The dynamic thresholding method can greatly improve the sample quality of pixel-space DPMs by guided sampling with large guidance scales.
         ```python
         ## Define the model and noise schedule (see examples below) 
         ## ....
 
         ## Define DPM-Solver and compute the sample.
-        dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True,
-                                thresholding=True, max_val=1.0)
+        dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++",
+                                correcting_x0_fn="dynamic_thresholding")
 
         ## Steps in [10, 20] can generate quite good samples.
         ## And steps = 20 can almost converge.
@@ -263,24 +265,24 @@ We recommend to use the following two types of solvers for different tasks:
 Specifically, we have the following suggestions:
 
 - For unconditional sampling:
-  - For obtaining a not too bad sample as fast as possible, use the 2nd-order (data-prediction + multistep) DPM-Solver with `steps` <= 10. 
-  - For obtaining a good but not converged sample, use the 3rd-order (noise-prediction + singlestep) DPM-Solver with `steps` = 15.
-  - **(Recommended)** For obtaining an almost converged sample, use the 3rd-order (noise-prediction + singlestep) DPM-Solver with `steps` = 20.
-  - For obtaining an absolutely converged sample, use the 3rd-order (noise-prediction + singlestep) DPM-Solver with `steps` = 50.
+  - For obtaining a not too bad sample as fast as possible, use the 2nd-order (dpmsolver++, multistep) DPM-Solver with `steps` <= 10. 
+  - For obtaining a good sample, use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver with `steps` = 15.
+  - **(Recommended)** For obtaining an almost converged sample, use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver with `steps` = 20.
+  - For obtaining an absolutely converged sample, use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver with `steps` = 50.
 
 - For guided sampling (especially with large guidance scales):
-  - Use the 2nd-order (data-prediction + multistep) DPM-Solver for all steps.
-  - For pixel-space DPMs (i.e. DPMs trained on images), set `thresholding = True`; else (e.g. latent-space DPMs) set `thresholding = False`.
+  - Use the 2nd-order (dpmsolver++, multistep) DPM-Solver for all steps.
+  - For pixel-space DPMs (i.e. DPMs trained on images), set `correcting_x0_fn="dynamic_thresholding"`; else (e.g. latent-space DPMs) set `correcting_x0_fn=None`.
   - Choices for `steps`:
     - For obtaining a not too bad sample as fast as possible, use `steps` <= 10. 
-    - For obtaining a good but not converged sample, use `steps` = 15.
+    - For obtaining a good sample, use `steps` = 15.
     - **(Recommended)** For obtaining an almost converged sample, use `steps` = 20.
     - For obtaining an absolutely converged sample, use `steps` = 50.
 
 <br />
 
 ## Example: Unconditional Sampling by DPM-Solver
-We recommend to use the 3rd-order (noise-prediction + singlestep) DPM-Solver. Here is an example for discrete-time DPMs:
+We recommend to use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver. Here is an example for discrete-time DPMs:
 
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -315,7 +317,9 @@ model_fn = model_wrapper(
 ## (We recommend singlestep DPM-Solver for unconditional sampling)
 ## You can adjust the `steps` to balance the computation
 ## costs and the sample quality.
-dpm_solver = DPM_Solver(model_fn, noise_schedule)
+dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver")
+## Can also try
+# dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
 ## You can use steps = 10, 12, 15, 20, 25, 50, 100.
 ## Empirically, we find that steps in [10, 20] can generate quite good samples.
@@ -332,7 +336,7 @@ x_sample = dpm_solver.sample(
 <br />
 
 ## Example: Classifier Guidance Sampling by DPM-Solver
-We recommend to use the 2nd-order (data-prediction + multistep) DPM-Solver, especially for large guidance scales. Here is an example for discrete-time DPMs:
+We recommend to use the 2nd-order (dpmsolver++, multistep) DPM-Solver, especially for large guidance scales. Here is an example for discrete-time DPMs:
 
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -380,13 +384,13 @@ model_fn = model_wrapper(
 ## You can adjust the `steps` to balance the computation
 ## costs and the sample quality.
 
-dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
 ## If the DPM is defined on pixel-space images, you can further
-## set `thresholding=True`. e.g.:
+## set `correcting_x0_fn="dynamic_thresholding"`. e.g.:
 
-# dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True,
-#   thresholding=True)
+# dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++",
+#   correcting_x0_fn="dynamic_thresholding")
 
 
 ## You can use steps = 10, 12, 15, 20, 25, 50, 100.
@@ -402,7 +406,7 @@ x_sample = dpm_solver.sample(
 ```
 
 ## Example: Classifier-Free Guidance Sampling by DPM-Solver
-We recommend to use the 2nd-order (data-prediction + multistep) DPM-Solver, especially for large guidance scales. Here is an example for discrete-time DPMs:
+We recommend to use the 2nd-order (dpmsolver++, multistep) DPM-Solver, especially for large guidance scales. Here is an example for discrete-time DPMs:
 
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -448,13 +452,13 @@ model_fn = model_wrapper(
 ## You can adjust the `steps` to balance the computation
 ## costs and the sample quality.
 
-dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
 ## If the DPM is defined on pixel-space images, you can further
-## set `thresholding=True`. e.g.:
+## set `correcting_x0_fn="dynamic_thresholding"`. e.g.:
 
-# dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True,
-#   thresholding=True)
+# dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++",
+#   correcting_x0_fn="dynamic_thresholding")
 
 
 ## You can use steps = 10, 12, 15, 20, 25, 50, 100.
@@ -627,34 +631,38 @@ For continuous-time DPMs from defined by $t \in [0,1]$, we simply wrap the model
 ## 3. Define DPM-Solver
 After defining the `model_fn` by the function `model_wrapper`, we can further use `model_fn` to define DPM-Solver and compute samples.
 
-We support the following four algorithms. The algorithms with noise-prediction are referred to DPM-Solver w.r.t. the *noise prediction model*, and the algorithms with data-prediction are referred to DPM-Solver w.r.t. the *data prediction model*. We also support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487) for algorithms with data-prediction. The dynamic thresholding method can further improve the sample quality by pixel-space DPMs with large guidance scales.
+We support the following four algorithms. The algorithms are [DPM-Solver](https://arxiv.org/abs/2206.00927) and [DPM-Solver++](https://arxiv.org/abs/2211.01095).
 
-Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model, and for algorithms with data-prediction we further convert the noise prediction model to the data prediction model inside the implementation of DPM-Solver.
+We also support the *dynamic thresholding* introduced by [Imagen](https://arxiv.org/abs/2205.11487) for algorithms with data-prediction. The dynamic thresholding method can further improve the sample quality by pixel-space DPMs with large guidance scales.
+
+Note that the `model_fn` for initializing DPM-Solver is always the noise prediction model. The setting for `algorithm_type` is for the algorithm (DPM-Solver or DPM-Solver++), not for the model. In other words, both DPM-Solver and DPM-Solver++ is suitable for all the four model types.
+
+- In fact, we implement the algorithms of DPM-Solver++ by firstly converting the noise prediction model to the data prediction model and then use DPM-Solver++ to sample, and users do not need to care about it.
 
 The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the multistep solvers (i.e.  Adams-Bashforth-like solvers) are different. We recommend to use different solvers for different tasks.
 
-| Method                        | Supported Orders | Support Thresholding | Remark                                                      |
+| Method                        | Supported Orders | Supporting Thresholding | Remark                                                      |
 | ----------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- |
-| noise-prediction, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3) |
-| noise-prediction, multistep  | 1, 2, 3          | No                   |                                                             |
-| data-prediction, singlestep        | 1, 2, 3          | Yes                  |                                                             |
-| data-prediction, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2)        |
+| DPM-Solver, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2206.00927). |
+| DPM-Solver, multistep  | 1, 2, 3          | No                   |                                                             |
+| DPM-Solver++, singlestep        | 1, 2, 3          | Yes                  | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2211.01095).                                                            |
+| DPM-Solver++, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2). See [this paper](https://arxiv.org/abs/2211.01095).        |
 
 
-- For DPM-Solver w.r.t. noise-prediction, define
+- For DPM-Solver with "dpmsolver" algorithm, define
     ```python
-    dpm_solver = DPM_Solver(model_fn, noise_schedule)
+    dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver")
     ```
 
-- For DPM-Solver w.r.t. data-prediction, define
+- For DPM-Solver with "dpmsolver++" algorithm, define
     ```python
-    dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+    dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
     ```
 
-- For DPM-Solver w.r.t. data-prediction and applying dynamic thresholding, define
+- For DPM-Solver with "dpmsolver++" and applying dynamic thresholding, define
     ```python
-    dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True,
-                            thresholding=True, max_val=1.0)
+    dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++",
+                            correcting_x0_fn="dynamic_thresholding", thresholding_max_val=1.0)
     ```
 
 You can use `dpm_solver.sample` to quickly sample from DPMs. This function computes the ODE solution at time `t_end` by DPM-Solver, given the initial `x` at time `t_start`.
@@ -836,6 +844,7 @@ x_sample = dpm_solver.sample(
 - [ ] Add more explanations about DPM-Solver.
 - [ ] Add a small jupyter example. 
 - [ ] Add VE type noise schedule.
+- [ ] Support downstream applications (e.g. inpainting, etc.).
 
 
 
