@@ -343,14 +343,28 @@ def model_wrapper(
 
 
 class DPM_Solver:
-    def __init__(self, model_fn, noise_schedule, predict_x0=False, thresholding=False, max_val=1.):
+    def __init__(
+        self,
+        model_fn,
+        noise_schedule,
+        algorithm_type="dpmsolver++",
+        correcting_x0_fn=None,
+        correcting_xt_fn=None,
+        thresholding_max_val=1.,
+        dynamic_thresholding_ratio=0.995,
+    ):
         """Construct a DPM-Solver. 
 
-        We support both the noise prediction model ("predicting epsilon") and the data prediction model ("predicting x0").
-        If `predict_x0` is False, we use the solver for the noise prediction model (DPM-Solver).
-        If `predict_x0` is True, we use the solver for the data prediction model (DPM-Solver++).
-            In such case, we further support the "dynamic thresholding" in [1] when `thresholding` is True.
-            The "dynamic thresholding" can greatly improve the sample quality for pixel-space DPMs with large guidance scales.
+        We support both DPM-Solver (`algorithm_type="dpmsolver"`) and DPM-Solver++ (`algorithm_type="dpmsolver++"`).
+
+        We also support the "dynamic thresholding" method in Imagen[1]. For pixel-space diffusion models, you
+        can set both `algorithm_type="dpmsolver++"` and `correcting_x0_fn="dynamic_thresholding"` to use the
+        dynamic thresholding. The "dynamic thresholding" can greatly improve the sample quality for pixel-space
+        DPMs with large guidance scales. Note that the thresholding method is **unsuitable** for latent-space
+        DPMs (such as stable-diffusion).
+
+        To support advanced algorithms in image-to-image applications, we also support corrector functions for
+        both x0 and xt.
 
         Args:
             model_fn: A noise prediction model function which accepts the continuous-time input (t in [epsilon, T]):
@@ -360,23 +374,61 @@ class DPM_Solver:
                 ``
                 The shape of `x` is `(batch_size, **shape)`, and the shape of `t_continuous` is `(batch_size,)`.
             noise_schedule: A noise schedule object, such as NoiseScheduleVP.
-            predict_x0: A `bool`. If true, use the data prediction model; else, use the noise prediction model.
-            thresholding: A `bool`. Valid when `predict_x0` is True. Whether to use the "dynamic thresholding" in [1].
-            max_val: A `float`. Valid when both `predict_x0` and `thresholding` are True. The max value for thresholding.
-        
-        [1] Chitwan Saharia, William Chan, Saurabh Saxena, Lala Li, Jay Whang, Emily Denton, Seyed Kamyar Seyed Ghasemipour, Burcu Karagol Ayan, S Sara Mahdavi, Rapha Gontijo Lopes, et al. Photorealistic text-to-image diffusion models with deep language understanding. arXiv preprint arXiv:2205.11487, 2022b.
+            algorithm_type: A `str`. Either "dpmsolver" or "dpmsolver++".
+            correcting_x0_fn: A `str` or a function with the following format:
+                ```
+                def correcting_x0_fn(x0, t):
+                    x0_new = ...
+                    return x0_new
+                ```
+                This function is to correct the outputs of the data prediction model at each sampling step. e.g.,
+                ```
+                x0_pred = data_pred_model(xt, t)
+                if correcting_x0_fn is not None:
+                    x0_pred = correcting_x0_fn(x0_pred, t)
+                xt_1 = update(x0_pred, xt, t)
+                ```
+                If `correcting_x0_fn="dynamic_thresholding"`, we use the dynamic thresholding proposed in Imagen[1].
+            correcting_xt_fn: A function with the following format:
+                ```
+                def correcting_xt_fn(xt, t, step):
+                    x_new = ...
+                    return x_new
+                ```
+                This function is to correct the intermediate samples xt at each sampling step. e.g.,
+                ```
+                xt = ...
+                xt = correcting_xt_fn(xt, t, step)
+                ```
+            thresholding_max_val: A `float`. The max value for thresholding.
+                Valid only when use `dpmsolver++` and `correcting_x0_fn="dynamic_thresholding"`.
+            dynamic_thresholding_ratio: A `float`. The ratio for dynamic thresholding (see Imagen[1] for details).
+                Valid only when use `dpmsolver++` and `correcting_x0_fn="dynamic_thresholding"`.
+
+        [1] Chitwan Saharia, William Chan, Saurabh Saxena, Lala Li, Jay Whang, Emily Denton, Seyed Kamyar Seyed Ghasemipour,
+            Burcu Karagol Ayan, S Sara Mahdavi, Rapha Gontijo Lopes, et al. Photorealistic text-to-image diffusion models
+            with deep language understanding. arXiv preprint arXiv:2205.11487, 2022b.
         """
         self.model = lambda x, t: model_fn(x, t.expand((x.shape[0])))
         self.noise_schedule = noise_schedule
-        self.predict_x0 = predict_x0
-        self.thresholding = thresholding
-        self.max_val = max_val
+        assert algorithm_type in ["dpmsolver", "dpmsolver++"]
+        self.algorithm_type = algorithm_type
+        if correcting_x0_fn == "dynamic_thresholding":
+            self.correcting_x0_fn = self.dynamic_thresholding_fn
+        else:
+            self.correcting_x0_fn = correcting_x0_fn
+        self.correcting_xt_fn = correcting_xt_fn
+        self.dynamic_thresholding_ratio = dynamic_thresholding_ratio
+        self.thresholding_max_val = thresholding_max_val
 
-    def dynamic_thresholding_fn(self, x0):
+    def dynamic_thresholding_fn(self, x0, t):
+        """
+        The dynamic thresholding method. 
+        """
         dims = x0.dim()
-        p = 0.995   # A hyperparameter in the paper of "Imagen" [1].
+        p = self.dynamic_thresholding_ratio
         s = torch.quantile(torch.abs(x0).reshape((x0.shape[0], -1)), p, dim=1)
-        s = expand_dims(torch.maximum(s, self.max_val * torch.ones_like(s).to(s.device)), dims)
+        s = expand_dims(torch.maximum(s, self.thresholding_max_val * torch.ones_like(s).to(s.device)), dims)
         x0 = torch.clamp(x0, -s, s) / s
         return x0
 
@@ -388,20 +440,20 @@ class DPM_Solver:
 
     def data_prediction_fn(self, x, t):
         """
-        Return the data prediction model (with thresholding).
+        Return the data prediction model (with corrector).
         """
         noise = self.noise_prediction_fn(x, t)
         alpha_t, sigma_t = self.noise_schedule.marginal_alpha(t), self.noise_schedule.marginal_std(t)
         x0 = (x - sigma_t * noise) / alpha_t
-        if self.thresholding:
-            x0 = self.dynamic_thresholding_fn(x0)
+        if self.correcting_x0_fn is not None:
+            x0 = self.correcting_x0_fn(x0)
         return x0
 
     def model_fn(self, x, t):
         """
         Convert the model to the noise prediction model or the data prediction model. 
         """
-        if self.predict_x0:
+        if self.algorithm_type == "dpmsolver++":
             return self.data_prediction_fn(x, t)
         else:
             return self.noise_prediction_fn(x, t)
@@ -522,7 +574,7 @@ class DPM_Solver:
         sigma_s, sigma_t = ns.marginal_std(s), ns.marginal_std(t)
         alpha_t = torch.exp(log_alpha_t)
 
-        if self.predict_x0:
+        if self.algorithm_type == "dpmsolver++":
             phi_1 = torch.expm1(-h)
             if model_s is None:
                 model_s = self.model_fn(x, s)
@@ -547,7 +599,7 @@ class DPM_Solver:
             else:
                 return x_t
 
-    def singlestep_dpm_solver_second_update(self, x, s, t, r1=0.5, model_s=None, return_intermediate=False, solver_type='dpm_solver'):
+    def singlestep_dpm_solver_second_update(self, x, s, t, r1=0.5, model_s=None, return_intermediate=False, solver_type='dpmsolver'):
         """
         Singlestep solver DPM-Solver-2 from time `s` to time `t`.
 
@@ -559,13 +611,13 @@ class DPM_Solver:
             model_s: A pytorch tensor. The model function evaluated at time `s`.
                 If `model_s` is None, we evaluate the model by `x` and `s`; otherwise we directly use it.
             return_intermediate: A `bool`. If true, also return the model value at time `s` and `s1` (the intermediate time).
-            solver_type: either 'dpm_solver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpm_solver' type.
+            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
+                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
-        if solver_type not in ['dpm_solver', 'taylor']:
-            raise ValueError("'solver_type' must be either 'dpm_solver' or 'taylor', got {}".format(solver_type))
+        if solver_type not in ['dpmsolver', 'taylor']:
+            raise ValueError("'solver_type' must be either 'dpmsolver' or 'taylor', got {}".format(solver_type))
         if r1 is None:
             r1 = 0.5
         ns = self.noise_schedule
@@ -577,7 +629,7 @@ class DPM_Solver:
         sigma_s, sigma_s1, sigma_t = ns.marginal_std(s), ns.marginal_std(s1), ns.marginal_std(t)
         alpha_s1, alpha_t = torch.exp(log_alpha_s1), torch.exp(log_alpha_t)
 
-        if self.predict_x0:
+        if self.algorithm_type == "dpmsolver++":
             phi_11 = torch.expm1(-r1 * h)
             phi_1 = torch.expm1(-h)
 
@@ -588,7 +640,7 @@ class DPM_Solver:
                 - (alpha_s1 * phi_11) * model_s
             )
             model_s1 = self.model_fn(x_s1, s1)
-            if solver_type == 'dpm_solver':
+            if solver_type == 'dpmsolver':
                 x_t = (
                     (sigma_t / sigma_s) * x
                     - (alpha_t * phi_1) * model_s
@@ -611,7 +663,7 @@ class DPM_Solver:
                 - (sigma_s1 * phi_11) * model_s
             )
             model_s1 = self.model_fn(x_s1, s1)
-            if solver_type == 'dpm_solver':
+            if solver_type == 'dpmsolver':
                 x_t = (
                     torch.exp(log_alpha_t - log_alpha_s) * x
                     - (sigma_t * phi_1) * model_s
@@ -628,7 +680,7 @@ class DPM_Solver:
         else:
             return x_t
 
-    def singlestep_dpm_solver_third_update(self, x, s, t, r1=1./3., r2=2./3., model_s=None, model_s1=None, return_intermediate=False, solver_type='dpm_solver'):
+    def singlestep_dpm_solver_third_update(self, x, s, t, r1=1./3., r2=2./3., model_s=None, model_s1=None, return_intermediate=False, solver_type='dpmsolver'):
         """
         Singlestep solver DPM-Solver-3 from time `s` to time `t`.
 
@@ -643,13 +695,13 @@ class DPM_Solver:
             model_s1: A pytorch tensor. The model function evaluated at time `s1` (the intermediate time given by `r1`).
                 If `model_s1` is None, we evaluate the model at `s1`; otherwise we directly use it.
             return_intermediate: A `bool`. If true, also return the model value at time `s`, `s1` and `s2` (the intermediate times).
-            solver_type: either 'dpm_solver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpm_solver' type.
+            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
+                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
-        if solver_type not in ['dpm_solver', 'taylor']:
-            raise ValueError("'solver_type' must be either 'dpm_solver' or 'taylor', got {}".format(solver_type))
+        if solver_type not in ['dpmsolver', 'taylor']:
+            raise ValueError("'solver_type' must be either 'dpmsolver' or 'taylor', got {}".format(solver_type))
         if r1 is None:
             r1 = 1. / 3.
         if r2 is None:
@@ -665,7 +717,7 @@ class DPM_Solver:
         sigma_s, sigma_s1, sigma_s2, sigma_t = ns.marginal_std(s), ns.marginal_std(s1), ns.marginal_std(s2), ns.marginal_std(t)
         alpha_s1, alpha_s2, alpha_t = torch.exp(log_alpha_s1), torch.exp(log_alpha_s2), torch.exp(log_alpha_t)
 
-        if self.predict_x0:
+        if self.algorithm_type == "dpmsolver++":
             phi_11 = torch.expm1(-r1 * h)
             phi_12 = torch.expm1(-r2 * h)
             phi_1 = torch.expm1(-h)
@@ -687,7 +739,7 @@ class DPM_Solver:
                 + r2 / r1 * (alpha_s2 * phi_22) * (model_s1 - model_s)
             )
             model_s2 = self.model_fn(x_s2, s2)
-            if solver_type == 'dpm_solver':
+            if solver_type == 'dpmsolver':
                 x_t = (
                     (sigma_t / sigma_s) * x
                     - (alpha_t * phi_1) * model_s
@@ -726,7 +778,7 @@ class DPM_Solver:
                 - r2 / r1 * (sigma_s2 * phi_22) * (model_s1 - model_s)
             )
             model_s2 = self.model_fn(x_s2, s2)
-            if solver_type == 'dpm_solver':
+            if solver_type == 'dpmsolver':
                 x_t = (
                     (torch.exp(log_alpha_t - log_alpha_s)) * x
                     - (sigma_t * phi_1) * model_s
@@ -749,7 +801,7 @@ class DPM_Solver:
         else:
             return x_t
 
-    def multistep_dpm_solver_second_update(self, x, model_prev_list, t_prev_list, t, solver_type="dpm_solver"):
+    def multistep_dpm_solver_second_update(self, x, model_prev_list, t_prev_list, t, solver_type="dpmsolver"):
         """
         Multistep solver DPM-Solver-2 from time `t_prev_list[-1]` to time `t`.
 
@@ -758,13 +810,13 @@ class DPM_Solver:
             model_prev_list: A list of pytorch tensor. The previous computed model values.
             t_prev_list: A list of pytorch tensor. The previous times, each time has the shape (1,)
             t: A pytorch tensor. The ending time, with the shape (1,).
-            solver_type: either 'dpm_solver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpm_solver' type.
+            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
+                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
-        if solver_type not in ['dpm_solver', 'taylor']:
-            raise ValueError("'solver_type' must be either 'dpm_solver' or 'taylor', got {}".format(solver_type))
+        if solver_type not in ['dpmsolver', 'taylor']:
+            raise ValueError("'solver_type' must be either 'dpmsolver' or 'taylor', got {}".format(solver_type))
         ns = self.noise_schedule
         model_prev_1, model_prev_0 = model_prev_list[-2], model_prev_list[-1]
         t_prev_1, t_prev_0 = t_prev_list[-2], t_prev_list[-1]
@@ -777,9 +829,9 @@ class DPM_Solver:
         h = lambda_t - lambda_prev_0
         r0 = h_0 / h
         D1_0 = (1. / r0) * (model_prev_0 - model_prev_1)
-        if self.predict_x0:
+        if self.algorithm_type == "dpmsolver++":
             phi_1 = torch.expm1(-h)
-            if solver_type == 'dpm_solver':
+            if solver_type == 'dpmsolver':
                 x_t = (
                     (sigma_t / sigma_prev_0) * x
                     - (alpha_t * phi_1) * model_prev_0
@@ -793,7 +845,7 @@ class DPM_Solver:
                 )
         else:
             phi_1 = torch.expm1(h)
-            if solver_type == 'dpm_solver':
+            if solver_type == 'dpmsolver':
                 x_t = (
                     (torch.exp(log_alpha_t - log_alpha_prev_0)) * x
                     - (sigma_t * phi_1) * model_prev_0
@@ -807,7 +859,7 @@ class DPM_Solver:
                 )
         return x_t
 
-    def multistep_dpm_solver_third_update(self, x, model_prev_list, t_prev_list, t, solver_type='dpm_solver'):
+    def multistep_dpm_solver_third_update(self, x, model_prev_list, t_prev_list, t, solver_type='dpmsolver'):
         """
         Multistep solver DPM-Solver-3 from time `t_prev_list[-1]` to time `t`.
 
@@ -816,8 +868,8 @@ class DPM_Solver:
             model_prev_list: A list of pytorch tensor. The previous computed model values.
             t_prev_list: A list of pytorch tensor. The previous times, each time has the shape (1,)
             t: A pytorch tensor. The ending time, with the shape (1,).
-            solver_type: either 'dpm_solver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpm_solver' type.
+            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
+                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
@@ -837,7 +889,7 @@ class DPM_Solver:
         D1_1 = (1. / r1) * (model_prev_1 - model_prev_2)
         D1 = D1_0 + (r0 / (r0 + r1)) * (D1_0 - D1_1)
         D2 = (1. / (r0 + r1)) * (D1_0 - D1_1)
-        if self.predict_x0:
+        if self.algorithm_type == "dpmsolver++":
             phi_1 = torch.expm1(-h)
             phi_2 = phi_1 / h + 1.
             phi_3 = phi_2 / h - 0.5
@@ -859,7 +911,7 @@ class DPM_Solver:
             )
         return x_t
 
-    def singlestep_dpm_solver_update(self, x, s, t, order, return_intermediate=False, solver_type='dpm_solver', r1=None, r2=None):
+    def singlestep_dpm_solver_update(self, x, s, t, order, return_intermediate=False, solver_type='dpmsolver', r1=None, r2=None):
         """
         Singlestep DPM-Solver with the order `order` from time `s` to time `t`.
 
@@ -869,8 +921,8 @@ class DPM_Solver:
             t: A pytorch tensor. The ending time, with the shape (1,).
             order: A `int`. The order of DPM-Solver. We only support order == 1 or 2 or 3.
             return_intermediate: A `bool`. If true, also return the model value at time `s`, `s1` and `s2` (the intermediate times).
-            solver_type: either 'dpm_solver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpm_solver' type.
+            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
+                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
             r1: A `float`. The hyperparameter of the second-order or third-order solver.
             r2: A `float`. The hyperparameter of the third-order solver.
         Returns:
@@ -885,7 +937,7 @@ class DPM_Solver:
         else:
             raise ValueError("Solver order must be 1 or 2 or 3, got {}".format(order))
 
-    def multistep_dpm_solver_update(self, x, model_prev_list, t_prev_list, t, order, solver_type='dpm_solver'):
+    def multistep_dpm_solver_update(self, x, model_prev_list, t_prev_list, t, order, solver_type='dpmsolver'):
         """
         Multistep DPM-Solver with the order `order` from time `t_prev_list[-1]` to time `t`.
 
@@ -895,8 +947,8 @@ class DPM_Solver:
             t_prev_list: A list of pytorch tensor. The previous times, each time has the shape (1,)
             t: A pytorch tensor. The ending time, with the shape (1,).
             order: A `int`. The order of DPM-Solver. We only support order == 1 or 2 or 3.
-            solver_type: either 'dpm_solver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpm_solver' type.
+            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
+                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
@@ -909,7 +961,7 @@ class DPM_Solver:
         else:
             raise ValueError("Solver order must be 1 or 2 or 3, got {}".format(order))
 
-    def dpm_solver_adaptive(self, x, order, t_T, t_0, h_init=0.05, atol=0.0078, rtol=0.05, theta=0.9, t_err=1e-5, solver_type='dpm_solver'):
+    def dpm_solver_adaptive(self, x, order, t_T, t_0, h_init=0.05, atol=0.0078, rtol=0.05, theta=0.9, t_err=1e-5, solver_type='dpmsolver'):
         """
         The adaptive step size solver based on singlestep DPM-Solver.
 
@@ -924,8 +976,8 @@ class DPM_Solver:
             theta: A `float`. The safety hyperparameter for adapting the step size. The default setting is 0.9, followed [1].
             t_err: A `float`. The tolerance for the time. We solve the diffusion ODE until the absolute error between the 
                 current time and `t_0` is less than `t_err`. The default setting is 1e-5.
-            solver_type: either 'dpm_solver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpm_solver' type.
+            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
+                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_0: A pytorch tensor. The approximated solution at time `t_0`.
 
@@ -981,8 +1033,8 @@ class DPM_Solver:
         return expand_dims(alpha_t, x.dim()) * x + expand_dims(sigma_t, x.dim()) * noise
 
     def sample(self, x, steps=20, t_start=None, t_end=None, order=2, skip_type='time_uniform',
-        method='multistep', lower_order_final=True, denoise_to_zero=False, solver_type='dpm_solver',
-        atol=0.0078, rtol=0.05, return_intermediate=False, corrector_fn=None,
+        method='multistep', lower_order_final=True, denoise_to_zero=False, solver_type='dpmsolver',
+        atol=0.0078, rtol=0.05, return_intermediate=False,
     ):
         """
         Compute the sample at time `t_end` by DPM-Solver, given the initial `x` at time `t_start`.
@@ -1032,15 +1084,19 @@ class DPM_Solver:
 
         Some advices for choosing the algorithm:
             - For **unconditional sampling** or **guided sampling with small guidance scale** by DPMs:
-                Use singlestep DPM-Solver ("DPM-Solver-fast" in the paper) with `order = 3`.
-                e.g.
-                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=False)
+                Use singlestep DPM-Solver or DPM-Solver++ ("DPM-Solver-fast" in the paper) with `order = 3`.
+                e.g., DPM-Solver:
+                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver")
+                    >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=3,
+                            skip_type='time_uniform', method='singlestep')
+                e.g., DPM-Solver++:
+                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
                     >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=3,
                             skip_type='time_uniform', method='singlestep')
             - For **guided sampling with large guidance scale** by DPMs:
-                Use multistep DPM-Solver with `predict_x0 = True` and `order = 2`.
+                Use multistep DPM-Solver with `algorithm_type="dpmsolver++"` and `order = 2`.
                 e.g.
-                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, predict_x0=True)
+                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
                     >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=2,
                             skip_type='time_uniform', method='multistep')
 
@@ -1079,18 +1135,11 @@ class DPM_Solver:
                 Only valid for `method=multistep` and `steps < 15`. We empirically find that
                 this trick is a key to stabilizing the sampling by DPM-Solver with very few steps
                 (especially for steps <= 10). So we recommend to set it to be `True`.
-            solver_type: A `str`. The taylor expansion type for the solver. `dpm_solver` or `taylor`. We recommend `dpm_solver`.
+            solver_type: A `str`. The taylor expansion type for the solver. `dpmsolver` or `taylor`. We recommend `dpmsolver`.
             atol: A `float`. The absolute tolerance of the adaptive step size solver. Valid when `method` == 'adaptive'.
             rtol: A `float`. The relative tolerance of the adaptive step size solver. Valid when `method` == 'adaptive'.
             return_intermediate: A `bool`. Whether to save the xt at each step.
                 When set to `True`, method returns a tuple (x0, intermediates); when set to False, method returns only x0.
-            corrector_fn: A function with the following format:
-                ```
-                def corrector_fn(x, t, step):
-                    x_new = ...
-                    return x_new
-                ```
-                The corrector function changes the result `x` at each time `t` (with the step `step`).
         Returns:
             x_end: A pytorch tensor. The approximated solution at time `t_end`.
 
@@ -1100,8 +1149,8 @@ class DPM_Solver:
         assert t_0 > 0 and t_T > 0, "Time range needs to be greater than 0. For discrete-time DPMs, it needs to be in [1 / N, 1], where N is the length of betas array"
         if return_intermediate:
             assert method in ['multistep', 'singlestep', 'singlestep_fixed'], "Cannot use adaptive solver when saving intermediate values"
-        if corrector_fn is not None:
-            assert method in ['multistep', 'singlestep', 'singlestep_fixed'], "Cannot use adaptive solver when corrector_fn is not None"
+        if self.correcting_xt_fn is not None:
+            assert method in ['multistep', 'singlestep', 'singlestep_fixed'], "Cannot use adaptive solver when correcting_xt_fn is not None"
         device = x.device
         intermediates = []
         with torch.no_grad():
@@ -1114,8 +1163,8 @@ class DPM_Solver:
                 # Init the initial values.
                 step = 0
                 t = timesteps[step]
-                if corrector_fn is not None:
-                    x = corrector_fn(x, t, step)
+                if self.correcting_xt_fn is not None:
+                    x = self.correcting_xt_fn(x, t, step)
                 if return_intermediate:
                     intermediates.append(x)
                 t_prev_list = [t]
@@ -1124,8 +1173,8 @@ class DPM_Solver:
                 for step in range(1, order):
                     t = timesteps[step]
                     x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, t, step, solver_type=solver_type)
-                    if corrector_fn is not None:
-                        x = corrector_fn(x, t, step)
+                    if self.correcting_xt_fn is not None:
+                        x = self.correcting_xt_fn(x, t, step)
                     if return_intermediate:
                         intermediates.append(x)
                     t_prev_list.append(t)
@@ -1139,8 +1188,8 @@ class DPM_Solver:
                     else:
                         step_order = order
                     x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, t, step_order, solver_type=solver_type)
-                    if corrector_fn is not None:
-                        x = corrector_fn(x, t, step)
+                    if self.correcting_xt_fn is not None:
+                        x = self.correcting_xt_fn(x, t, step)
                     if return_intermediate:
                         intermediates.append(x)
                     for i in range(order - 1):
@@ -1165,8 +1214,8 @@ class DPM_Solver:
                     r1 = None if order <= 1 else (lambda_inner[1] - lambda_inner[0]) / h
                     r2 = None if order <= 2 else (lambda_inner[2] - lambda_inner[0]) / h
                     x = self.singlestep_dpm_solver_update(x, s, t, order, solver_type=solver_type, r1=r1, r2=r2)
-                    if corrector_fn is not None:
-                        x = corrector_fn(x, t, step)
+                    if self.correcting_xt_fn is not None:
+                        x = self.correcting_xt_fn(x, t, step)
                     if return_intermediate:
                         intermediates.append(x)
             else:
@@ -1174,8 +1223,8 @@ class DPM_Solver:
             if denoise_to_zero:
                 t = torch.ones((1,)).to(device) * t_0
                 x = self.denoise_to_zero_fn(x, t)
-                if corrector_fn is not None:
-                    x = corrector_fn(x, t, step + 1)
+                if self.correcting_xt_fn is not None:
+                    x = self.correcting_xt_fn(x, t, step + 1)
                 if return_intermediate:
                     intermediates.append(x)
         if return_intermediate:

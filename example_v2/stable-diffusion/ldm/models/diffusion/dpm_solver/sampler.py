@@ -76,7 +76,7 @@ class DPMSolverSampler(object):
             guidance_scale=unconditional_guidance_scale,
         )
 
-        dpm_solver = DPM_Solver(model_fn, ns, predict_x0=True, thresholding=False)
+        dpm_solver = DPM_Solver(model_fn, ns, algorithm_type="dpmsolver++")
         x = dpm_solver.sample(img, steps=S, skip_type="time_uniform", method="multistep", order=2, lower_order_final=True)
 
         return x.to(device), None

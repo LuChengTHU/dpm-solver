@@ -130,7 +130,7 @@ def get_sampling_fn(config, sde, shape, inverse_scaler, eps):
                                   method=config.sampling.dpm_solver_method,
                                   order=config.sampling.dpm_solver_order,
                                   denoise=config.sampling.noise_removal,
-                                  predict_x0=config.sampling.predict_x0,
+                                  algorithm_type=config.sampling.algorithm_type,
                                   thresholding=config.sampling.thresholding,
                                   rtol=config.sampling.rtol,
                                   device=config.device)
@@ -504,7 +504,7 @@ def get_ode_sampler(sde, shape, inverse_scaler,
 
 def get_dpm_solver_sampler(sde, shape, inverse_scaler, steps=10, eps=1e-3,
                     skip_type="logSNR", method="singlestep", order=3,
-                    denoise=False, predict_x0=False, thresholding=False,
+                    denoise=False, algorithm_type="dpmsolver", thresholding=False,
                     rtol=0.05, atol=0.0078, device='cuda'):
   """Create a Predictor-Corrector (PC) sampler.
 
@@ -537,7 +537,7 @@ def get_dpm_solver_sampler(sde, shape, inverse_scaler, steps=10, eps=1e-3,
     """
     with torch.no_grad():
       noise_pred_fn = get_noise_fn(sde, model, train=False, continuous=True)
-      dpm_solver = DPM_Solver(noise_pred_fn, ns, predict_x0=predict_x0, thresholding=thresholding)
+      dpm_solver = DPM_Solver(noise_pred_fn, ns, algorithm_type=algorithm_type, correcting_x0_fn="dynamic_thresholding" if thresholding else None)
       # Initial sample
       x = sde.prior_sampling(shape).to(device)
       x = dpm_solver.sample(
@@ -551,6 +551,7 @@ def get_dpm_solver_sampler(sde, shape, inverse_scaler, steps=10, eps=1e-3,
         denoise_to_zero=denoise,
         atol=atol,
         rtol=rtol,
+        lower_order_final=False,
       )
       return inverse_scaler(x), steps
 

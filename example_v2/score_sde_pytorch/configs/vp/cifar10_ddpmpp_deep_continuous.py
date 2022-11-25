@@ -38,7 +38,7 @@ def get_config():
   sampling.method = 'dpm_solver'
   sampling.dpm_solver_method = 'singlestep'
   sampling.dpm_solver_order = 3
-  sampling.predict_x0 = False
+  sampling.algorithm_type = 'dpmsolver'
   sampling.thresholding = False
   sampling.noise_removal = False
   sampling.steps = 10
