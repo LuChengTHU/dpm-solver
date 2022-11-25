@@ -16,7 +16,11 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
 
 [Stable-Diffusion](https://github.com/CompVis/stable-diffusion) with DPM-Solver++:
 
-![sdm](assets/sdm-1.png)
+![sdm](assets/sdm-3.png)
+
+[DiffEdit](https://arxiv.org/abs/2210.11427) with DPM-Solver++:
+
+![inpainting](assets/inpainting_example.png)
 
 <br />
 

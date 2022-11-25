@@ -43,8 +43,9 @@ We provide a reference sampling script in `scripts/diffedit_inpaint.ipynb` to im
 
 We could easily accelerate such editing / inpainting by DPM-Solver **in only 20 steps**.
 
+![inpainting](../../assets/inpainting_example.png)
 
-
+<br />
 
 # Stable Diffusion
 
