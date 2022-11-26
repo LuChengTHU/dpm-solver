@@ -89,9 +89,12 @@ class DPMSolverSampler(object):
         return x.to(device), intermediates
 
     @torch.no_grad()
-    def stochastic_encode(self, x0, t, noise=None):
+    def stochastic_encode(self, x0, encode_ratio, noise=None):
         # fast, but does not allow for exact reconstruction
-        return DPM_Solver(None, self.noise_schedule).add_noise(x0, t, noise=noise)
+        t_end = (1. - 1. / self.noise_schedule.total_N) * encode_ratio + 1. / self.noise_schedule.total_N
+        t_end_tensor = torch.tensor([t_end], device=x0.device, dtype=x0.dtype)
+        x = DPM_Solver(None, self.noise_schedule).add_noise(x0, t_end_tensor, noise=noise)
+        return x, t_end
 
     @torch.no_grad()
     def encode(self,

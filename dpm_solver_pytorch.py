@@ -1031,7 +1031,11 @@ class DPM_Solver:
         if noise is None:
             noise = torch.randn((t.shape[0], *x.shape), device=x.device)
         x = x.reshape((-1, *x.shape))
-        return expand_dims(alpha_t, x.dim()) * x + expand_dims(sigma_t, x.dim()) * noise
+        xt = expand_dims(alpha_t, x.dim()) * x + expand_dims(sigma_t, x.dim()) * noise
+        if t.shape[0] == 1:
+            return xt.squeeze(0)
+        else:
+            return xt
 
     def inverse(self, x, steps=20, t_start=None, t_end=None, order=2, skip_type='time_uniform',
         method='multistep', lower_order_final=True, denoise_to_zero=False, solver_type='dpmsolver',
