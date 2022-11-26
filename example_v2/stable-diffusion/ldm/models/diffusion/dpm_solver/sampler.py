@@ -90,11 +90,10 @@ class DPMSolverSampler(object):
 
     @torch.no_grad()
     def stochastic_encode(self, x0, encode_ratio, noise=None):
-        # fast, but does not allow for exact reconstruction
-        t_end = (1. - 1. / self.noise_schedule.total_N) * encode_ratio + 1. / self.noise_schedule.total_N
-        t_end_tensor = torch.tensor([t_end], device=x0.device, dtype=x0.dtype)
-        x = DPM_Solver(None, self.noise_schedule).add_noise(x0, t_end_tensor, noise=noise)
-        return x, t_end
+        t_end = self.ratio_to_time(encode_ratio)
+        t_end = torch.tensor([t_end], device=x0.device, dtype=x0.dtype)
+        x = DPM_Solver(None, self.noise_schedule).add_noise(x0, t_end, noise=noise)
+        return x
 
     @torch.no_grad()
     def encode(self,
@@ -130,13 +129,13 @@ class DPMSolverSampler(object):
             guidance_scale=unconditional_guidance_scale,
         )
 
-        t_end = (1. - 1. / self.noise_schedule.total_N) * encode_ratio + 1. / self.noise_schedule.total_N
+        t_end = self.ratio_to_time(encode_ratio)
 
         dpm_solver = DPM_Solver(model_fn, self.noise_schedule, algorithm_type="dpmsolver++")
 
         x, intermediates = dpm_solver.inverse(x, steps=S, t_end=t_end, skip_type=skip_type, method=method, order=order, lower_order_final=lower_order_final, return_intermediate=True)
 
-        return x, intermediates, t_end
+        return x, intermediates
 
     def time_discrete_to_continuous(self, t_discrete):
         """
@@ -149,3 +148,15 @@ class DPMSolverSampler(object):
         Convert [0.001, 1] to [0, 999].
         """
         return t_continuous * self.noise_schedule.total_N - 1. 
+
+    def ratio_to_time(self, ratio):
+        """
+        Convert [0, 1] to [0.001, 1].
+        """
+        return (1. - 1. / self.noise_schedule.total_N) * ratio + 1. / self.noise_schedule.total_N
+
+    def time_to_ratio(self, t_continuous):
+        """
+        Convert [0.001, 1] to [0, 1].
+        """
+        return (t_continuous - 1. / self.noise_schedule.total_N) / (1. - self.noise_schedule.total_N)
