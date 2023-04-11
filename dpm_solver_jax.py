@@ -99,7 +99,7 @@ class NoiseScheduleVP:
         self.schedule = schedule
         if schedule == 'discrete':
             if betas is not None:
-                log_alphas = 0.5 * jnp.log(1 - betas).cumsum(dim=0)
+                log_alphas = 0.5 * jnp.log(1 - betas).cumsum(axis=0)
             else:
                 assert alphas_cumprod is not None
                 log_alphas = 0.5 * jnp.log(alphas_cumprod)
@@ -289,7 +289,7 @@ def model_wrapper(
 
     def noise_pred_fn(x, t_continuous, cond=None):
         if t_continuous.reshape((-1,)).shape[0] == 1:
-            t_continuous = t_continuous.tile((x.shape[0]))
+            t_continuous = jnp.tile(t_continuous,(x.shape[0]))
         t_input = get_model_input_time(t_continuous)
         if cond is None:
             output = model(x, t_input, **model_kwargs)
@@ -315,14 +315,14 @@ def model_wrapper(
         Compute the gradient of the classifier, i.e. nabla_{x} log p_t(cond | x_t).
         """
         log_prob = lambda x_in: classifier_fn(x_in, t_input, condition, **classifier_kwargs).sum()
-        return jax.grad(log_prob)(x_in)
+        return jax.grad(log_prob)(x)
 
     def model_fn(x, t_continuous):
         """
         The noise predicition model function that is used for DPM-Solver.
         """
         if t_continuous.reshape((-1,)).shape[0] == 1:
-            t_continuous = t_continuous.tile((x.shape[0]))
+            t_continuous = jnp.tile(t_continuous,(x.shape[0]))
         if guidance_type == "uncond":
             return noise_pred_fn(x, t_continuous)
         elif guidance_type == "classifier":
@@ -429,7 +429,7 @@ class DPM_Solver:
             return jnp.linspace(t_T, t_0, N + 1)
         elif skip_type == 'time_quadratic':
             t_order = 2
-            t = jnp.linspace(t_T**(1. / t_order), t_0**(1. / t_order), N + 1).pow(t_order)
+            t = jnp.power(jnp.linspace(t_T**(1. / t_order), t_0**(1. / t_order), N + 1),t_order)
             return t
         else:
             raise ValueError("Unsupported skip_type {}, need to be 'logSNR' or 'time_uniform' or 'time_quadratic'".format(skip_type))
@@ -1066,12 +1066,12 @@ class DPM_Solver:
             assert steps >= order
             timesteps = self.get_time_steps(skip_type=skip_type, t_T=t_T, t_0=t_0, N=steps)
             assert timesteps.shape[0] - 1 == steps
-            vec_t = timesteps[0].tile((x.shape[0]))
+            vec_t = jnp.tile(timesteps[0],(x.shape[0]))
             model_prev_list = [self.model_fn(x, vec_t)]
             t_prev_list = [vec_t]
             # Init the first `order` values by lower order multistep DPM-Solver.
             for init_order in range(1, order):
-                vec_t = timesteps[init_order].tile(x.shape[0])
+                vec_t = jnp.tile(timesteps[init_order],(x.shape[0]))
                 x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, vec_t, init_order, solver_type=solver_type)
                 model_prev_list.append(self.model_fn(x, vec_t))
                 t_prev_list.append(vec_t)
@@ -1079,7 +1079,7 @@ class DPM_Solver:
             ts_prev, models_prev = jnp.array(t_prev_list), jnp.array(model_prev_list)
             def multistep_loop_fn(step, val):
                 x, ts_prev, models_prev = val
-                vec_t = timesteps[step].tile(x.shape[0])
+                vec_t = jnp.tile(timesteps[step],(x.shape[0]))
                 x = self.multistep_dpm_solver_update(x, models_prev, ts_prev, vec_t, order, solver_type=solver_type)
                 ts_prev = jnp.roll(ts_prev, -1, axis=0)
                 models_prev = jnp.roll(models_prev, -1, axis=0)
@@ -1101,7 +1101,7 @@ class DPM_Solver:
                 t_T_inner, t_0_inner = timesteps_outer[i], timesteps_outer[i + 1]
                 timesteps_inner = self.get_time_steps(skip_type=skip_type, t_T=t_T_inner, t_0=t_0_inner, N=order)
                 lambda_inner = self.noise_schedule.marginal_lambda(timesteps_inner)
-                vec_s, vec_t = t_T_inner.tile(x.shape[0]), t_0_inner.tile(x.shape[0])
+                vec_s, vec_t = jnp.tile(t_T_inner,(x.shape[0])), jnp.tile(t_0_inner,(x.shape[0]))
                 h = lambda_inner[-1] - lambda_inner[0]
                 r1 = None if order <= 1 else (lambda_inner[1] - lambda_inner[0]) / h
                 r2 = None if order <= 2 else (lambda_inner[2] - lambda_inner[0]) / h
@@ -1136,7 +1136,7 @@ def interpolate_fn(x, xp, yp):
         The function values f(x), with shape [N, C].
     """
     N, K = x.shape[0], xp.shape[1]
-    all_x = jnp.concatenate([jnp.expand_dims(x, 2), jnp.expand_dims(xp, 0).tile((N, 1, 1))], axis=2)
+    all_x = jnp.concatenate([jnp.expand_dims(x, 2), jnp.tile(jnp.expand_dims(xp, 0),(N, 1, 1))], axis=2)
     x_indices = jnp.argsort(all_x, axis=2)
     sorted_all_x = jnp.take_along_axis(all_x, x_indices, axis=2)
     x_idx = jnp.argmin(x_indices, axis=2)
@@ -1158,7 +1158,7 @@ def interpolate_fn(x, xp, yp):
             jax.lax.eq(x_idx, K), jnp.array(K - 2), cand_start_idx,
         ),
     )
-    y_positions_expanded = jnp.expand_dims(yp, 0).tile((N, 1, 1))
+    y_positions_expanded = jnp.tile(jnp.expand_dims(yp, 0),(N, 1, 1))
     start_y = jnp.take_along_axis(y_positions_expanded, jnp.expand_dims(start_idx2, 2), axis=2).squeeze(2)
     end_y = jnp.take_along_axis(y_positions_expanded, jnp.expand_dims(start_idx2 + 1, 2), axis=2).squeeze(2)
     cand = start_y + (x - start_x) * (end_y - start_y) / (end_x - start_x)
