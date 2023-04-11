@@ -10,7 +10,7 @@ An [online demo](https://huggingface.co/spaces/LuChengTHU/dpmsolver_sdm) for DPM
 
 DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-order solver for diffusion ODEs with the convergence order guarantee. DPM-Solver is suitable for both discrete-time and continuous-time diffusion models **without any further training**. Experimental results show that DPM-Solver can generate high-quality samples in **only 10 to 20** function evaluations on various datasets.
 
-[ADM](https://arxiv.org/abs/2105.05233) with DPM-Solver:
+[Guided-Diffusion](https://arxiv.org/abs/2105.05233) with DPM-Solver:
 
 ![DPM-Solver](assets/intro.png)
 
@@ -108,30 +108,31 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 
 | Method                        | Supported Orders | Supporting Thresholding | Remark                                                      |
 | ----------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- |
-| DPM-Solver, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2206.00927). |
+| DPM-Solver, singlestep | 1, 2, 3          | No                   |  |
 | DPM-Solver, multistep  | 1, 2, 3          | No                   |                                                             |
-| DPM-Solver++, singlestep        | 1, 2, 3          | Yes                  | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2211.01095).                                                            |
-| DPM-Solver++, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2). See [this paper](https://arxiv.org/abs/2211.01095).        |
+| DPM-Solver++, singlestep        | 1, 2, 3          | Yes                  |                                                             |
+| DPM-Solver++, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling with `order = 2`**, and for **unconditional sampling with `order = 3`**.        |
 
 <br />
 
 # Code Examples
+
+## DDPM and Guided-Diffusion with DPM-Solver
+We provide an [example of guided-diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/examples/ddpm_and_guided-diffusion) in `examples/ddpm_and_guided-diffusion`.
+
 ## Text-to-Image by Stable-Diffusion with DPM-Solver
-We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion) in `example_v2/stable-diffusion`. DPM-Solver can greatly accelerate the sampling speed of the [original stable-diffusion](https://github.com/CompVis/stable-diffusion).
+We provide an [example of stable diffusion with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/examples/stable-diffusion) in `examples/stable-diffusion`. DPM-Solver can greatly accelerate the sampling speed of the [original stable-diffusion](https://github.com/CompVis/stable-diffusion).
 
 ## Image Editing (DiffEdit) by Stable-Diffusion with DPM-Solver
-We provide an [example of DiffEdit with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/stable-diffusion), which can be used for image editing. The idea of [DiffEdit](https://arxiv.org/abs/2210.11427) can be general decribe as, using DDIM to get a 
+We provide an [example of DiffEdit with DPM-Solver](https://github.com/LuChengTHU/dpm-solver/tree/main/examples/stable-diffusion), which can be used for image editing. The idea of [DiffEdit](https://arxiv.org/abs/2210.11427) can be general decribe as, using DDIM to get a 
 invertable latent serise, then apply different prompt for inpainting (controled by auto generated mask). 
 
 We could easily accelerate such editing / inpainting by DPM-Solver **in only 20 steps**.
 
 
 ## ScoreSDE with DPM-Solver
-We provide a [pytorch example](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/score_sde_pytorch) and a [JAX example](https://github.com/LuChengTHU/dpm-solver/tree/main/example_v2/score_sde_jax) in `example_v2/` which apply DPM-Solver for [Yang Song's score_sde repo](https://github.com/yang-song/score_sde) on CIFAR-10.
+We provide a [pytorch example](https://github.com/LuChengTHU/dpm-solver/tree/main/examples/score_sde_pytorch) and a [JAX example](https://github.com/LuChengTHU/dpm-solver/tree/main/examples/score_sde_jax) in `examples/` which apply DPM-Solver for [Yang Song's score_sde repo](https://github.com/yang-song/score_sde) on CIFAR-10.
 
-
-## Other Examples
-Coming soon...
 
 <br />
 
@@ -142,7 +143,7 @@ In each step, DPM-Solver needs to compute the corresponding $\alpha_t$, $\sigma_
 
 - For discrete-time DPMs, we support a picewise linear interpolation of $\log\alpha_t$  in the `NoiseScheduleVP` class. It can support all types of VP noise schedules.
 
-- For continuous-time DPMs, we support both linear schedule (as used in [DDPM](https://arxiv.org/abs/2006.11239) and [ScoreSDE](https://arxiv.org/abs/2011.13456)) and cosine schedule (as used in [improved-DDPM](https://arxiv.org/abs/2102.09672)) in the `NoiseScheduleVP` class.
+- For continuous-time DPMs, we support linear schedule (as used in [DDPM](https://arxiv.org/abs/2006.11239) and [ScoreSDE](https://arxiv.org/abs/2011.13456)) in the `NoiseScheduleVP` class.
 
 Moreover, DPM-Solver is designed for the continuous-time diffusion ODEs. For discrete-time diffusion models, we also implement a wrapper function to convert the discrete-time diffusion models to the continuous-time diffusion models in the `model_wrapper` function.
 
@@ -206,7 +207,7 @@ Moreover, for unconditional sampling and guided sampling, we have some recommend
 ## Suggestions for the Detailed Settings
 We recommend to use the following two types of solvers for different tasks:
 
-- 3rd-order singlestep DPM-Solver:
+- 3rd-order multistep DPM-Solver:
     ```python
     ## Define the model and noise schedule (see examples below) 
     ## ....
@@ -223,7 +224,7 @@ We recommend to use the following two types of solvers for different tasks:
         steps=20,
         order=3,
         skip_type="time_uniform",
-        method="singlestep",
+        method="multistep",
     )
     ```
 
@@ -270,9 +271,9 @@ Specifically, we have the following suggestions:
 
 - For unconditional sampling:
   - For obtaining a not too bad sample as fast as possible, use the 2nd-order (dpmsolver++, multistep) DPM-Solver with `steps` <= 10. 
-  - For obtaining a good sample, use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver with `steps` = 15.
-  - **(Recommended)** For obtaining an almost converged sample, use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver with `steps` = 20.
-  - For obtaining an absolutely converged sample, use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver with `steps` = 50.
+  - For obtaining a good sample, use the 3rd-order (dpmsolver or dpmsolver++, multistep) DPM-Solver with `steps` = 15.
+  - **(Recommended)** For obtaining an almost converged sample, use the 3rd-order (dpmsolver or dpmsolver++, multistep) DPM-Solver with `steps` = 20.
+  - For obtaining an absolutely converged sample, use the 3rd-order (dpmsolver or dpmsolver++, multistep) DPM-Solver with `steps` = 50.
 
 - For guided sampling (especially with large guidance scales):
   - Use the 2nd-order (dpmsolver++, multistep) DPM-Solver for all steps.
@@ -286,7 +287,7 @@ Specifically, we have the following suggestions:
 <br />
 
 ## Example: Unconditional Sampling by DPM-Solver
-We recommend to use the 3rd-order (dpmsolver or dpmsolver++, singlestep) DPM-Solver. Here is an example for discrete-time DPMs:
+We recommend to use the 3rd-order (dpmsolver or dpmsolver++, multistep) DPM-Solver. Here is an example for discrete-time DPMs:
 
 ```python
 from dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -321,9 +322,9 @@ model_fn = model_wrapper(
 ## (We recommend singlestep DPM-Solver for unconditional sampling)
 ## You can adjust the `steps` to balance the computation
 ## costs and the sample quality.
-dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver")
+dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 ## Can also try
-# dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
+# dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver")
 
 ## You can use steps = 10, 12, 15, 20, 25, 50, 100.
 ## Empirically, we find that steps in [10, 20] can generate quite good samples.
@@ -333,7 +334,7 @@ x_sample = dpm_solver.sample(
     steps=20,
     order=3,
     skip_type="time_uniform",
-    method="singlestep",
+    method="multistep",
 )
 ```
 
@@ -647,10 +648,10 @@ The performance of singlestep solvers (i.e. Runge-Kutta-like solvers) and the mu
 
 | Method                        | Supported Orders | Supporting Thresholding | Remark                                                      |
 | ----------------------------- | ---------------- | -------------------- | ----------------------------------------------------------- |
-| DPM-Solver, singlestep | 1, 2, 3          | No                   | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2206.00927). |
+| DPM-Solver, singlestep | 1, 2, 3          | No                   |  |
 | DPM-Solver, multistep  | 1, 2, 3          | No                   |                                                             |
-| DPM-Solver++, singlestep        | 1, 2, 3          | Yes                  | Recommended for **unconditional sampling** (with order = 3). See [this paper](https://arxiv.org/abs/2211.01095).                                                            |
-| DPM-Solver++, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling** (with order = 2). See [this paper](https://arxiv.org/abs/2211.01095).        |
+| DPM-Solver++, singlestep        | 1, 2, 3          | Yes                  |                                                             |
+| DPM-Solver++, multistep         | 1, 2, 3          | Yes                  | Recommended for **guided sampling with `order = 2`**, and for **unconditional sampling with `order = 3`**.        |
 
 
 - For DPM-Solver with "dpmsolver" algorithm, define
@@ -843,7 +844,7 @@ x_sample = dpm_solver.sample(
 # TODO List
 - [x] Add stable-diffusion examples.
 - [x] Support Diffusers.
-- [ ] Documentation for example code.
+- [x] Documentation for example code.
 - [x] Clean and add the JAX code example.
 - [ ] Add more explanations about DPM-Solver.
 - [ ] Add a small jupyter example. 
