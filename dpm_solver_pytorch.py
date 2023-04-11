@@ -60,21 +60,19 @@ class NoiseScheduleVP:
 
         2. For continuous-time DPMs:
 
-            We support two types of VPSDEs: linear (DDPM) and cosine (improved-DDPM). The hyperparameters for the noise
-            schedule are the default settings in DDPM and improved-DDPM:
+            We support the linear VPSDE for the continuous time setting. The hyperparameters for the noise
+            schedule are the default settings in Yang Song's ScoreSDE:
 
             Args:
                 beta_min: A `float` number. The smallest beta for the linear schedule.
                 beta_max: A `float` number. The largest beta for the linear schedule.
-                cosine_s: A `float` number. The hyperparameter in the cosine schedule.
-                cosine_beta_max: A `float` number. The hyperparameter in the cosine schedule.
                 T: A `float` number. The ending time of the forward process.
 
         ===============================================================
 
         Args:
             schedule: A `str`. The noise schedule of the forward SDE. 'discrete' for discrete-time DPMs,
-                    'linear' or 'cosine' for continuous-time DPMs.
+                    'linear' for continuous-time DPMs.
         Returns:
             A wrapper object of the forward SDE (VP type).
         
@@ -93,8 +91,8 @@ class NoiseScheduleVP:
 
         """
 
-        if schedule not in ['discrete', 'linear', 'cosine']:
-            raise ValueError("Unsupported noise schedule {}. The schedule needs to be 'discrete' or 'linear' or 'cosine'".format(schedule))
+        if schedule not in ['discrete', 'linear']:
+            raise ValueError("Unsupported noise schedule {}. The schedule needs to be 'discrete' or 'linear'".format(schedule))
 
         self.schedule = schedule
         if schedule == 'discrete':
@@ -103,25 +101,28 @@ class NoiseScheduleVP:
             else:
                 assert alphas_cumprod is not None
                 log_alphas = 0.5 * torch.log(alphas_cumprod)
-            self.total_N = len(log_alphas)
             self.T = 1.
+            self.log_alpha_array = self.numerical_clip_alpha(log_alphas).reshape((1, -1,)).to(dtype=dtype)
+            self.total_N = self.log_alpha_array.shape[1]
             self.t_array = torch.linspace(0., 1., self.total_N + 1)[1:].reshape((1, -1)).to(dtype=dtype)
-            self.log_alpha_array = log_alphas.reshape((1, -1,)).to(dtype=dtype)
         else:
+            self.T = 1.
             self.total_N = 1000
             self.beta_0 = continuous_beta_0
             self.beta_1 = continuous_beta_1
-            self.cosine_s = 0.008
-            self.cosine_beta_max = 999.
-            self.cosine_t_max = math.atan(self.cosine_beta_max * (1. + self.cosine_s) / math.pi) * 2. * (1. + self.cosine_s) / math.pi - self.cosine_s
-            self.cosine_log_alpha_0 = math.log(math.cos(self.cosine_s / (1. + self.cosine_s) * math.pi / 2.))
-            self.schedule = schedule
-            if schedule == 'cosine':
-                # For the cosine schedule, T = 1 will have numerical issues. So we manually set the ending time T.
-                # Note that T = 0.9946 may be not the optimal setting. However, we find it works well.
-                self.T = 0.9946
-            else:
-                self.T = 1.
+
+    def numerical_clip_alpha(self, log_alphas, clipped_lambda=-5.1):
+        """
+        For some beta schedules such as cosine schedule, the log-SNR has numerical isssues. 
+        We clip the log-SNR near t=T within -5.1 to ensure the stability.
+        Such a trick is very useful for diffusion models with the cosine schedule, such as i-DDPM, guided-diffusion and GLIDE.
+        """
+        log_sigmas = 0.5 * torch.log(1. - torch.exp(2. * log_alphas))
+        lambs = log_alphas - log_sigmas  
+        idx = torch.searchsorted(torch.flip(lambs, [0]), clipped_lambda)
+        if idx > 0:
+            log_alphas = log_alphas[:-idx]
+        return log_alphas
 
     def marginal_log_mean_coeff(self, t):
         """
@@ -131,10 +132,6 @@ class NoiseScheduleVP:
             return interpolate_fn(t.reshape((-1, 1)), self.t_array.to(t.device), self.log_alpha_array.to(t.device)).reshape((-1))
         elif self.schedule == 'linear':
             return -0.25 * t ** 2 * (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
-        elif self.schedule == 'cosine':
-            log_alpha_fn = lambda s: torch.log(torch.cos((s + self.cosine_s) / (1. + self.cosine_s) * math.pi / 2.))
-            log_alpha_t =  log_alpha_fn(t) - self.cosine_log_alpha_0
-            return log_alpha_t
 
     def marginal_alpha(self, t):
         """
@@ -168,11 +165,6 @@ class NoiseScheduleVP:
             log_alpha = -0.5 * torch.logaddexp(torch.zeros((1,)).to(lamb.device), -2. * lamb)
             t = interpolate_fn(log_alpha.reshape((-1, 1)), torch.flip(self.log_alpha_array.to(lamb.device), [1]), torch.flip(self.t_array.to(lamb.device), [1]))
             return t.reshape((-1,))
-        else:
-            log_alpha = -0.5 * torch.logaddexp(-2. * lamb, torch.zeros((1,)).to(lamb))
-            t_fn = lambda log_alpha_t: torch.arccos(torch.exp(log_alpha_t + self.cosine_log_alpha_0)) * 2. * (1. + self.cosine_s) / math.pi - self.cosine_s
-            t = t_fn(log_alpha)
-            return t
 
 
 def model_wrapper(
@@ -326,7 +318,7 @@ def model_wrapper(
             cond_grad = cond_grad_fn(x, t_input)
             sigma_t = noise_schedule.marginal_std(t_continuous)
             noise = noise_pred_fn(x, t_continuous)
-            return noise - guidance_scale * sigma_t * cond_grad
+            return noise - guidance_scale * expand_dims(sigma_t, x.dim()) * cond_grad
         elif guidance_type == "classifier-free":
             if guidance_scale == 1. or unconditional_condition is None:
                 return noise_pred_fn(x, t_continuous, cond=condition)
