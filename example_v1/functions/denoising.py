@@ -19,6 +19,7 @@ def cond_fn(x, t_discrete, y, classifier, classifier_scale):
 
 
 def generalized_steps(x, seq, model_fn, b, eta=0, is_cond_classifier=False, classifier=None, classifier_scale=1.0, **model_kwargs):
+    device = x.device
     with torch.no_grad():
         def model(x, t_discrete):
             if is_cond_classifier:
@@ -41,7 +42,7 @@ def generalized_steps(x, seq, model_fn, b, eta=0, is_cond_classifier=False, clas
             next_t = (torch.ones(n) * j).to(x.device)
             at = compute_alpha(b, t.long())
             at_next = compute_alpha(b, next_t.long())
-            xt = xs[-1].to('cuda')
+            xt = xs[-1].to(device)
             et = model(xt, t)
             x0_t = (xt - et * (1 - at).sqrt()) / at.sqrt()
             x0_preds.append(x0_t.to('cpu'))
@@ -56,6 +57,7 @@ def generalized_steps(x, seq, model_fn, b, eta=0, is_cond_classifier=False, clas
 
 
 def ddpm_steps(x, seq, model_fn, b, is_cond_classifier=False, classifier=None, classifier_scale=1.0, **model_kwargs):
+    device = x.device
     with torch.no_grad():
         def model(x, t_discrete):
             if is_cond_classifier:
@@ -80,7 +82,7 @@ def ddpm_steps(x, seq, model_fn, b, is_cond_classifier=False, classifier=None, c
             at = compute_alpha(betas, t.long())
             atm1 = compute_alpha(betas, next_t.long())
             beta_t = 1 - at / atm1
-            x = xs[-1].to('cuda')
+            x = xs[-1].to(device)
 
             output = model(x, t.float())
             e = output

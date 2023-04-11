@@ -42,8 +42,6 @@ training:
 
 sampling:
     total_N: 1000
-    schedule: "linear"
-    time_input_type: '1'
     batch_size: 500
     last_only: True
     fid_stats_dir: "fid_stats/fid_stats_celeba64_train_50000_ddim.npz"

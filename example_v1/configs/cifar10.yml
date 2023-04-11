@@ -41,8 +41,6 @@ training:
 
 sampling:
     total_N: 1000
-    schedule: "linear"
-    time_input_type: '1'
     batch_size: 1000
     last_only: True
     fid_stats_dir: "fid_stats/fid_stats_cifar10_train_pytorch.npz"

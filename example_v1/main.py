@@ -8,6 +8,8 @@ import os
 import torch
 import numpy as np
 import torch.utils.tensorboard as tb
+import torch.distributed as dist
+import torch.multiprocessing as mp
 
 from runners.diffusion import Diffusion
 
@@ -68,12 +70,12 @@ def parse_args_and_config():
         "--sample_type",
         type=str,
         default="generalized",
-        help="sampling approach ('generalized'(DDIM) or 'ddpm_noisy'(DDPM) or 'dpm-solver')",
+        help="sampling approach ('generalized'(DDIM) or 'ddpm_noisy'(DDPM) or 'dpmsolver' or 'dpmsolver++')",
     )
     parser.add_argument(
         "--skip_type",
         type=str,
-        default="logSNR",
+        default="time_uniform",
         help="skip according to ('uniform' or 'quadratic' for DDIM/DDPM; 'logSNR' or 'time_uniform' or 'time_quadratic' for DPM-Solver)",
     )
     parser.add_argument(
@@ -95,9 +97,6 @@ def parse_args_and_config():
         help="eta used to control the variances of sigma",
     )
     parser.add_argument(
-        "--start_time", type=float, default=1e-4, help="start time for sampling"
-    )
-    parser.add_argument(
         "--fixed_class", type=int, default=None, help="fixed class label for conditional sampling"
     )
     parser.add_argument(
@@ -106,10 +105,25 @@ def parse_args_and_config():
     parser.add_argument(
         "--dpm_solver_rtol", type=float, default=0.05, help="rtol for adaptive step size algorithm"
     )
+    parser.add_argument(
+        "--dpm_solver_method",
+        type=str,
+        default="singlestep",
+        help="method of dpm_solver ('adaptive' or 'singlestep' or 'multistep' or 'singlestep_fixed'",
+    )
+    parser.add_argument(
+        "--dpm_solver_type",
+        type=str,
+        default="dpm_solver",
+        help="type of dpm_solver ('dpm_solver' or 'taylor'",
+    )
+    parser.add_argument("--scale", type=float, default=None)
+    parser.add_argument("--denoise", action="store_true", default=False)
+    parser.add_argument("--lower_order_final", action="store_true", default=False)
+    parser.add_argument("--thresholding", action="store_true", default=False)
     
     parser.add_argument("--sequence", action="store_true")
-    parser.add_argument("--adaptive_step_size", action="store_true")
-    parser.add_argument("--dpm_solver_fast", action="store_true")
+    parser.add_argument("--port", type=str, default="12355")
 
     args = parser.parse_args()
     args.log_path = os.path.join(args.exp, "logs", args.doc)
@@ -210,12 +224,6 @@ def parse_args_and_config():
     logging.info("Using device: {}".format(device))
     new_config.device = device
 
-    # set random seed
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
-
     torch.backends.cudnn.benchmark = True
 
     return args, new_config
@@ -238,8 +246,26 @@ def main():
     logging.info("Exp instance id = {}".format(os.getpid()))
     logging.info("Exp comment = {}".format(args.comment))
 
+    world_size = torch.cuda.device_count()
+    mp.spawn(sample,
+            args=(world_size, args, config),
+            nprocs=world_size,
+            join=True)
+
+
+def sample(rank, world_size, args, config):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = args.port
+    # initialize the process group
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+        # set random seed
+    torch.manual_seed(args.seed + rank)
+    np.random.seed(args.seed + rank)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed + rank)
+
     try:
-        runner = Diffusion(args, config)
+        runner = Diffusion(args, config, rank=rank)
         if args.sample:
             runner.sample()
         elif args.test:
@@ -248,9 +274,7 @@ def main():
             runner.train()
     except Exception:
         logging.error(traceback.format_exc())
-
-    return 0
-
+    dist.destroy_process_group()
 
 if __name__ == "__main__":
     sys.exit(main())

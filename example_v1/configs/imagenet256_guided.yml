@@ -1,6 +1,5 @@
 data:
-    dataset: "LSUN"
-    category: "bedroom"
+    dataset: "IMAGENET256"
     image_size: 256
     channels: 3
     logit_transform: false
@@ -9,7 +8,7 @@ data:
     random_flip: true
     rescaled: true
     num_workers: 32
-    num_classes: 1
+    num_classes: 1000
 
 model:
     model_type: "guided_diffusion"
@@ -20,11 +19,11 @@ model:
     out_channels: 6
     num_res_blocks: 2
     attention_resolutions: [8, 16, 32] # [256 // 32, 256 // 16, 256 // 8]
-    dropout: 0.1
+    dropout: 0.0
     channel_mult: [1, 1, 2, 2, 4, 4]
     conv_resample: true
     dims: 2
-    num_classes: null
+    num_classes: 1000
     use_checkpoint: false
     use_fp16: true
     num_heads: 4
@@ -35,7 +34,22 @@ model:
     use_new_attention_order: false
     var_type: fixedlarge
     ema: false
-    ckpt_dir: "~/ddpm_ckpt/bedroom/lsun_bedroom.pt"
+    ckpt_dir: "~/ddpm_ckpt/imagenet256/256x256_diffusion.pt"
+
+classifier:
+    ckpt_dir: "~/ddpm_ckpt/imagenet256/256x256_classifier.pt"
+    image_size: 256
+    in_channels: 3
+    model_channels: 128
+    out_channels: 1000
+    num_res_blocks: 2
+    attention_resolutions: [8, 16, 32] # [256 // 32, 256 // 16, 256 // 8]
+    channel_mult: [1, 1, 2, 2, 4, 4]
+    use_fp16: true
+    num_head_channels: 64
+    use_scale_shift_norm: true
+    resblock_updown: true
+    pool: "attention"
 
 diffusion:
     beta_schedule: linear
@@ -47,8 +61,8 @@ sampling:
     total_N: 1000
     batch_size: 50
     last_only: True
-    fid_stats_dir: "fid_stats/VIRTUAL_lsun_bedroom256.npz"
-    fid_total_samples: 50000
-    fid_batch_size: 1000
-    cond_class: false
-    classifier_scale: 0.0
+    fid_stats_dir: "fid_stats/VIRTUAL_imagenet256_labeled.npz"
+    fid_total_samples: 10000
+    fid_batch_size: 200
+    cond_class: true
+    classifier_scale: 2.5

@@ -32,15 +32,13 @@ model:
     ckpt_dir: "~/ddpm_ckpt/imagenet64/imagenet64_uncond_100M_1500K.pt"
 
 diffusion:
-    beta_schedule: linear
-    beta_start: 0.0001
-    beta_end: 0.02
-    num_diffusion_timesteps: 1000
+    beta_schedule: cosine
+    beta_start: null
+    beta_end: null
+    num_diffusion_timesteps: 4000
 
 sampling:
     total_N: 4000
-    schedule: "cosine"
-    time_input_type: '1'
     batch_size: 500
     last_only: True
     fid_stats_dir: "fid_stats/fid_stats_imagenet64_train.npz"
