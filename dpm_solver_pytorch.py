@@ -289,13 +289,13 @@ def model_wrapper(
             return output
         elif model_type == "x_start":
             alpha_t, sigma_t = noise_schedule.marginal_alpha(t_continuous), noise_schedule.marginal_std(t_continuous)
-            return (x - alpha_t * output) / sigma_t
+            return (x - expand_dims(alpha_t, x.dim()) * output) / expand_dims(sigma_t, x.dim())
         elif model_type == "v":
             alpha_t, sigma_t = noise_schedule.marginal_alpha(t_continuous), noise_schedule.marginal_std(t_continuous)
-            return alpha_t * output + sigma_t * x
+            return expand_dims(alpha_t, x.dim()) * output + expand_dims(sigma_t, x.dim()) * x
         elif model_type == "score":
             sigma_t = noise_schedule.marginal_std(t_continuous)
-            return -sigma_t * output
+            return -expand_dims(sigma_t, x.dim()) * output
 
     def cond_grad_fn(x, t_input):
         """
