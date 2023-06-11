@@ -1,10 +1,8 @@
 # DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps
 
-The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://arxiv.org/abs/2206.00927) (**Neurips 2022 Oral**) and [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095) by Cheng Lu, Yuhao Zhou, Fan Bao, Jianfei Chen, Chongxuan Li and Jun Zhu.
+[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/LuChengTHU/dpmsolver_sdm)
 
---------------------
-
-An [online demo](https://huggingface.co/spaces/LuChengTHU/dpmsolver_sdm) for DPM-Solver with stable-diffusion. Many thanks for the help and hardware resource supporting by HuggingFace 🤗.
+The official code for the paper [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://arxiv.org/abs/2206.00927) (**Neurips 2022 Oral**) and [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095) by [Cheng Lu](https://luchengthu.github.io/), [Yuhao Zhou](https://yuhaoz.com/), [Fan Bao](https://baofff.github.io/), [Jianfei Chen](https://ml.cs.tsinghua.edu.cn/~jianfei/), [Chongxuan Li](https://zhenxuan00.github.io/) and [Jun Zhu](https://ml.cs.tsinghua.edu.cn/~jun/index.shtml).
 
 --------------------
 
@@ -21,6 +19,93 @@ DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-orde
 [DiffEdit](https://arxiv.org/abs/2210.11427) with DPM-Solver++:
 
 ![inpainting](assets/inpainting_example.png)
+
+# Use the SOTA Multistep DPM-Solver++ with Diffusers
+🤗 [Diffusers](https://github.com/huggingface/diffusers) is a fantastic library for diffusion models. It supports both DPM-Solver and DPM-Solver++. The multistep DPM-Solver++ is the fastest solver currently.
+## Stable-Diffusion
+The second-order multistep DPM-Solver++ is the default solver for Stable-Diffusion online demos (e.g., see [example](https://huggingface.co/stabilityai/stable-diffusion-2-1#examples)) and can also be used in LoRA (e.g., see [example](https://huggingface.co/docs/diffusers/training/lora#text-to-image-inference)). Here is an example:
+
+```python
+import torch
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+
+model_id = "stabilityai/stable-diffusion-2-1"
+
+# Use the DPMSolverMultistepScheduler (DPM-Solver++) scheduler here
+pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+pipe = pipe.to("cuda")
+
+prompt = "a photo of an astronaut riding a horse on mars"
+image = pipe(prompt).images[0]
+    
+image.save("astronaut_rides_horse.png")
+```
+
+## DeepFloyd-IF
+We recommend the SDE version DPM-Solver++ for the stage-1, and the ODE version DPM-Solver++ for the upscaling stages (both stage-2 and 3).
+```python
+from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers.utils import pt_to_pil
+import torch
+
+# stage 1
+stage_1 = DiffusionPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", torch_dtype=torch.float16)
+stage_1.enable_xformers_memory_efficient_attention()  # remove line if torch.__version__ >= 2.0.0
+stage_1.enable_model_cpu_offload()
+
+# stage 2
+stage_2 = DiffusionPipeline.from_pretrained(
+    "DeepFloyd/IF-II-L-v1.0", text_encoder=None, variant="fp16", torch_dtype=torch.float16
+)
+stage_2.enable_xformers_memory_efficient_attention()  # remove line if torch.__version__ >= 2.0.0
+stage_2.enable_model_cpu_offload()
+
+# stage 3
+safety_modules = {"feature_extractor": stage_1.feature_extractor, "safety_checker": stage_1.safety_checker, "watermarker": stage_1.watermarker}
+stage_3 = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-x4-upscaler", **safety_modules, torch_dtype=torch.float16)
+stage_3.enable_xformers_memory_efficient_attention()  # remove line if torch.__version__ >= 2.0.0
+stage_3.enable_model_cpu_offload()
+
+
+def set_scheduler(stage):
+    if scheduler_name == 'dpm++':
+        scheduler = DPMSolverMultistepScheduler.from_config(stage.scheduler.config)
+        scheduler.config.algorithm_type = 'dpmsolver++'
+    elif scheduler_name == 'sde-dpm++':
+        scheduler = DPMSolverMultistepScheduler.from_config(stage.scheduler.config)
+        scheduler.config.algorithm_type = 'sde-dpmsolver++'
+    stage.scheduler = scheduler
+    return stage
+
+
+upscale_steps = 25
+stage_1 = set_scheduler(stage_1, 'sde-dpm++')
+stage_2 = set_scheduler(stage_2, 'dpm++')
+stage_3 = set_scheduler(stage_3, 'dpm++')
+
+prompt = "casual photo of a leaf maple syrup glass container sitting on a wooden table in a log cabin, high depth of field during golden hour as the sunlight shines through the windows, dusty air"
+
+# text embeds
+prompt_embeds, negative_embeds = stage_1.encode_prompt(prompt)
+
+generator = torch.manual_seed(0)
+
+# stage 1
+image = stage_1(prompt_embeds=prompt_embeds, negative_prompt_embeds=negative_embeds, generator=generator, output_type="pt").images
+pt_to_pil(image)[0].save("./if_stage_I.png")
+
+# stage 2
+image = stage_2(
+    image=image, prompt_embeds=prompt_embeds, negative_prompt_embeds=negative_embeds, generator=generator, output_type="pt", num_inference_steps=upscale_steps
+).images
+pt_to_pil(image)[0].save("./if_stage_II.png")
+
+# stage 3
+image = stage_3(prompt=prompt, image=image, generator=generator, noise_level=100, num_inference_steps=upscale_steps).images
+image[0].save("./if_stage_III.png")
+```
+
 
 <br />
 
