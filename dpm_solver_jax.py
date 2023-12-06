@@ -475,7 +475,7 @@ class DPM_Solver:
                 K = steps // 2 + 1
                 orders = [2,] * (K - 1) + [1]
         elif order == 1:
-            K = 1
+            K = steps
             orders = [1,] * steps
         else:
             raise ValueError("'order' must be '1' or '2' or '3'.")
